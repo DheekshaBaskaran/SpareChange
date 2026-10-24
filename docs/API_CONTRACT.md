@@ -153,7 +153,7 @@ Current state of a job. Poll it (e.g. every 1s) until `status` is `COMPLETE` or 
     },
     "verification": {
       "status": "VERIFIED",
-      "checks": [{ "name": "Worker exited cleanly", "passed": true, "detail": "exit code 0" }],
+      "checks": [{ "name": "Container exited cleanly", "passed": true, "detail": "exit code 0" }],
       "verifiedAt": "..."
     },
     "payment": {

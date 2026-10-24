@@ -15,7 +15,7 @@ export function verifyExecution(job: Job): VerificationResult {
 
   const checks: VerificationCheck[] = [
     {
-      name: "Worker exited cleanly",
+      name: execution?.containerId ? "Container exited cleanly" : "Worker process exited cleanly",
       passed: execution?.exitCode === 0,
       detail: `exit code ${execution?.exitCode ?? "missing"}`,
     },

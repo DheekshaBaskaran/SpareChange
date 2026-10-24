@@ -56,17 +56,21 @@ export function StatusBadge({ status, className }: { status: JobStatus; classNam
   );
 }
 
-/** Small tag that says whether a piece of the system is real or simulated. */
-export function ModeTag({ real, children }: { real: boolean; children: ReactNode }) {
+/**
+ * Small tag that says whether a piece of the system is real or simulated.
+ * `planned` = it hasn't happened yet, so we don't claim it is live.
+ */
+export function ModeTag({ real, planned = false, children }: { real: boolean; planned?: boolean; children: ReactNode }) {
+  const word = planned ? "planned" : real ? "live" : "simulated";
   return (
     <span
       className={cx(
         "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10.5px] uppercase tracking-wide",
-        real ? "border-value/25 text-value" : "border-line-strong text-muted",
+        real && !planned ? "border-value/25 text-value" : "border-line-strong text-muted",
       )}
-      title={real ? "This runs for real" : "Simulated for the demo"}
+      title={planned ? "Not attempted yet" : real ? "This runs for real" : "Simulated for the demo"}
     >
-      {real ? "live" : "simulated"} · {children}
+      {word} · {children}
     </span>
   );
 }

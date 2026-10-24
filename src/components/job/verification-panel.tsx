@@ -5,7 +5,7 @@ import type { Job } from "@/lib/types";
 import { Badge, Panel, PanelHeader, cx } from "../ui";
 
 const PLANNED_CHECKS = [
-  "Worker exited cleanly",
+  "Workload exited cleanly",
   "Start and completion markers in logs",
   "Result belongs to this job",
   "Model actually trained",

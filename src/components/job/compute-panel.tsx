@@ -4,11 +4,11 @@
 // a small accuracy chart parsed from the worker's PROGRESS lines,
 // and the last few log lines.
 
-import { ChevronDown, SquareTerminal } from "lucide-react";
+import { ChevronDown, CircleDashed, Container, Cpu, Globe, SquareTerminal } from "lucide-react";
 import { useEffect, useState } from "react";
-import { clock } from "@/lib/format";
+import { clock, timeOfDay } from "@/lib/format";
 import { EXECUTION_MODE_LABEL } from "@/lib/status";
-import type { Job } from "@/lib/types";
+import type { ExecutionResult, Job } from "@/lib/types";
 import { ModeTag, Panel, PanelHeader, cx } from "../ui";
 
 /** Pull accuracy values out of lines like "PROGRESS 40 epoch=12 loss=0.07 accuracy=97.8%". */
@@ -50,6 +50,55 @@ function AccuracyChart({ values }: { values: number[] }) {
   );
 }
 
+/**
+ * One line that says exactly where this workload ran, so nobody can
+ * confuse a real Docker container with the simulated path.
+ */
+function ExecutionEnvironment({ job, execution }: { job: Job; execution?: ExecutionResult }) {
+  const containerId = execution?.containerId;
+  const environments = {
+    "local-docker": {
+      icon: Container,
+      title: "Real Docker container",
+      detail: [execution?.image ?? "sparechange-worker:latest", containerId ? `container ${containerId.slice(0, 12)}` : "creating container…"],
+      real: true,
+    },
+    remote: {
+      icon: Globe,
+      title: "Remote worker",
+      detail: [execution?.workerId ?? "connecting…", containerId ? `container ${containerId.slice(0, 12)}` : "process on remote host"],
+      real: true,
+    },
+    "local-process": {
+      icon: Cpu,
+      title: "Local worker process",
+      detail: ["real compute", "no container isolation"],
+      real: true,
+    },
+    mock: {
+      icon: CircleDashed,
+      title: "Simulated execution",
+      detail: ["no compute ran", "demo fallback only"],
+      real: false,
+    },
+  } as const;
+  const environment = environments[job.executionMode];
+  const Icon = environment.icon;
+
+  return (
+    <div
+      className={cx(
+        "mx-5 mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-4 py-3",
+        environment.real ? "border-compute/30 bg-compute/[0.07]" : "border-line-strong bg-surface-2",
+      )}
+    >
+      <Icon className={cx("size-5 shrink-0", environment.real ? "text-compute" : "text-muted")} aria-hidden />
+      <span className={cx("text-sm font-semibold", environment.real ? "text-ink" : "text-ink-2")}>{environment.title}</span>
+      <span className="font-mono text-xs text-muted">{environment.detail.join(" · ")}</span>
+    </div>
+  );
+}
+
 export function ComputePanel({ job }: { job: Job }) {
   const execution = job.execution;
   const running = job.status === "RUNNING";
@@ -75,13 +124,18 @@ export function ComputePanel({ job }: { job: Job }) {
     <Panel>
       <PanelHeader eyebrow="Compute" title={running ? "Workload running" : execution ? "Workload" : "Provisioning compute"} right={<ModeTag real={mode.real}>{mode.label}</ModeTag>} />
 
+      <ExecutionEnvironment job={job} execution={execution} />
+
       <div className="grid grid-cols-2 gap-x-6 gap-y-4 px-5 py-5 sm:grid-cols-3">
         <Telemetry label="Worker" value={execution?.workerId && execution.workerId !== "pending" ? execution.workerId : "allocating…"} mono />
         <Telemetry label="GPU allocation" value={`${job.deal.workload.gpuCount}× ${job.deal.workload.gpuModel.replace(/^NVIDIA\s+/, "")}`} />
-        <Telemetry label="Container" value={execution?.containerId ? execution.containerId.slice(0, 12) : job.executionMode === "local-docker" || job.executionMode === "remote" ? "starting…" : "— (process)"} mono />
+        <Telemetry label="Container ID" value={execution?.containerId ? execution.containerId.slice(0, 12) : job.executionMode === "local-docker" || job.executionMode === "remote" ? "starting…" : "— (no container)"} mono />
+        <Telemetry label="Started" value={execution ? timeOfDay(execution.startedAt) : "—"} mono />
+        <Telemetry label="Ended" value={execution?.endedAt ? timeOfDay(execution.endedAt) : running ? "running" : "—"} mono />
         <Telemetry label="Runtime" value={clock(runtimeMs)} mono />
         <Telemetry label="Exit code" value={execution?.exitCode ?? (running ? "running" : "—")} mono />
         <Telemetry label="Operations" value={output ? `${(output.operations / 1e9).toFixed(1)} B` : "—"} mono />
+        <Telemetry label="Final accuracy" value={output ? `${(output.accuracy * 100).toFixed(1)}%` : "—"} mono />
       </div>
 
       <div className="px-5">

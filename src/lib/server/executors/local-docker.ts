@@ -9,6 +9,7 @@
 // during the PROVISIONING step.
 // ─────────────────────────────────────────────────────────────
 
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { getConfig } from "../config";
 import { failModeFor, type Executor } from "./types";
@@ -16,9 +17,18 @@ import { captureCommand, handleWorkerLine, runCommand } from "./worker-output";
 
 const WORKER_DIR = path.join(process.cwd(), "worker");
 
+// Where to find the docker CLI. Usually it is on the PATH, but Docker Desktop
+// also ships it inside the app bundle (useful if the PATH link was not created).
+const DOCKER_CANDIDATES = [
+  "/usr/local/bin/docker",
+  "/opt/homebrew/bin/docker",
+  "/Applications/Docker.app/Contents/Resources/bin/docker",
+];
+const DOCKER = process.env.DOCKER_BIN || DOCKER_CANDIDATES.find((candidate) => existsSync(candidate)) || "docker";
+
 async function dockerIsRunning(): Promise<boolean> {
   try {
-    const { exitCode } = await captureCommand("docker", ["info", "--format", "{{.ServerVersion}}"], 5000);
+    const { exitCode } = await captureCommand(DOCKER, ["info", "--format", "{{.ServerVersion}}"], 5000);
     return exitCode === 0;
   } catch {
     return false; // docker binary not installed
@@ -26,10 +36,10 @@ async function dockerIsRunning(): Promise<boolean> {
 }
 
 async function ensureImage(image: string): Promise<boolean> {
-  const inspect = await captureCommand("docker", ["image", "inspect", image], 5000);
+  const inspect = await captureCommand(DOCKER, ["image", "inspect", image], 5000);
   if (inspect.exitCode === 0) return true;
   console.log(`[docker] building ${image} from ${WORKER_DIR}`);
-  const build = await captureCommand("docker", ["build", "-t", image, WORKER_DIR], 180_000);
+  const build = await captureCommand(DOCKER, ["build", "-t", image, WORKER_DIR], 180_000);
   return build.exitCode === 0;
 }
 
@@ -48,7 +58,7 @@ export const localDockerExecutor: Executor = {
     execution.workerId = "docker-worker-01";
     execution.image = dockerImage;
 
-    const created = await captureCommand("docker", [
+    const created = await captureCommand(DOCKER, [
       "create",
       "--name", `sparechange-${job.jobId}`,
       "--cpus", "2",
@@ -63,12 +73,12 @@ export const localDockerExecutor: Executor = {
     execution.containerId = containerId;
 
     try {
-      execution.exitCode = await runCommand("docker", ["start", "-a", containerId], {
+      execution.exitCode = await runCommand(DOCKER, ["start", "-a", containerId], {
         onLine: (line) => handleWorkerLine(line, execution),
         timeoutMs: (workloadSeconds + 60) * 1000,
       });
     } finally {
-      await captureCommand("docker", ["rm", "-f", containerId]).catch(() => undefined);
+      await captureCommand(DOCKER, ["rm", "-f", containerId]).catch(() => undefined);
     }
   },
 };

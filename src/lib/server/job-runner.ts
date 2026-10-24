@@ -87,7 +87,10 @@ async function runJob(job: Job, options: ExecuteOptions): Promise<void> {
       execution.runtimeMs = Date.parse(execution.endedAt) - Date.parse(execution.startedAt);
     }
     if (execution.exitCode !== 0) {
-      throw new StepError("RUNNING", `The workload exited with code ${execution.exitCode}. Check the worker logs.`);
+      // Include the worker's own error line (if it printed one) so the reason is clear.
+      const errorLine = [...execution.logs].reverse().find((line) => line.includes("ERROR"));
+      const reason = errorLine ? errorLine.replace(/^.*ERROR\s*/, "") : "Check the worker logs.";
+      throw new StepError("RUNNING", `The workload exited with code ${execution.exitCode}: ${reason}`);
     }
 
     // ── VERIFYING ────────────────────────────────

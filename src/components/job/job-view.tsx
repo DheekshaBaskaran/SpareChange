@@ -144,7 +144,9 @@ export function JobView({ jobId }: { jobId: string }) {
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted">Payment</dt>
                 <dd>
-                  <ModeTag real={paymentMode.real}>{job.payment?.paymentMode ?? job.paymentMode}</ModeTag>
+                  <ModeTag real={paymentMode.real} planned={!job.payment}>
+                    {job.payment?.paymentMode ?? job.paymentMode}
+                  </ModeTag>
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">

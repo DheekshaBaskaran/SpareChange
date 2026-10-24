@@ -29,7 +29,7 @@ export function SettlementPanel({ job }: { job: Job }) {
       <PanelHeader
         eyebrow="Settlement"
         title={isX402 ? "x402 autonomous settlement" : "Payment settlement"}
-        right={<ModeTag real={mode.real}>{mode.label}</ModeTag>}
+        right={<ModeTag real={mode.real} planned={!payment}>{mode.label}</ModeTag>}
       />
 
       <ul className="space-y-2.5 px-5 py-4">

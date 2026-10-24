@@ -71,15 +71,17 @@ PAYMENT_MODE=mock
 ```
 
 ### Docker mode
-Install Docker Desktop and start it, then:
+1. Install Docker Desktop (macOS): `brew install --cask docker-desktop`, or download it from docker.com.
+2. Open **Docker Desktop** from Applications once. Accept the license, allow the privileged helper if macOS asks, and skip sign-in (an account is not needed).
+3. Wait until the whale icon in the menu bar says Docker is running, then check:
 ```bash
-npm run docker:build          # optional, SpareChange builds the image on first use
-npm run worker:test           # run the workload once without Docker
+docker info --format '{{.ServerVersion}}'   # prints a version number when the daemon is running
+npm run docker:build                        # builds sparechange-worker:latest (SpareChange also builds it on first use)
+docker run --rm -e JOB_ID=manual-test sparechange-worker:latest   # run one workload by hand
 ```
-```
-EXECUTION_MODE=local-docker   # or "auto"
-```
-Docker runs each job with `--cpus 2 --memory 512m` and captures the container ID, logs and exit code.
+4. With `EXECUTION_MODE=auto` (the default), SpareChange now uses Docker automatically. To require Docker, set `EXECUTION_MODE=local-docker` (it still falls back to a local process if Docker stops).
+
+Each job runs in its own container (`--cpus 2 --memory 512m`, unprivileged user). SpareChange records the container ID, start/end time, runtime, exit code and logs, and the execution screen shows **"Real Docker container"**. If the `docker` command isn't on your PATH, SpareChange also looks inside `/Applications/Docker.app`, or you can set `DOCKER_BIN`.
 
 ### Remote worker mode
 On the remote machine (any VM with Node 20+, ideally Docker):
