@@ -1,11 +1,14 @@
 // ─────────────────────────────────────────────────────────────
-// In-memory storage for jobs and received deals.
+// Storage for jobs and received deals.
 //
-// This is the simplest storage that works for a hackathon demo:
-// data lives as long as the server process does. It is stored on
-// `globalThis` so it survives Next.js hot reloads during development.
+// Kept in memory (on `globalThis`, so it survives Next.js hot reloads)
+// and mirrored to a small JSON file, .data/jobs.json, so job history
+// survives server restarts. No database needed for the demo.
+// The .data folder is gitignored.
 // ─────────────────────────────────────────────────────────────
 
+import fs from "node:fs";
+import path from "node:path";
 import type { Deal, Job, JobStatus } from "../types";
 
 interface Store {
@@ -13,15 +16,53 @@ interface Store {
   deals: Map<string, Deal>;
 }
 
-const globalForStore = globalThis as unknown as { __sparechangeStore?: Store };
+const DATA_FILE = path.join(process.cwd(), ".data", "jobs.json");
+const TERMINAL: JobStatus[] = ["COMPLETE", "FAILED"];
 
-const store: Store = (globalForStore.__sparechangeStore ??= {
-  jobs: new Map(),
-  deals: new Map(),
-});
+/** Load saved jobs/deals from disk (once per server start). */
+function loadFromDisk(): Store {
+  const store: Store = { jobs: new Map(), deals: new Map() };
+  try {
+    const saved = JSON.parse(fs.readFileSync(DATA_FILE, "utf8")) as { jobs: Job[]; deals: Deal[] };
+    for (const deal of saved.deals ?? []) store.deals.set(deal.dealId, deal);
+    for (const job of saved.jobs ?? []) {
+      // A job that was mid-run when the server stopped can never finish: say so honestly.
+      if (!TERMINAL.includes(job.status)) {
+        const step = job.status;
+        job.failure = { step, message: "The server restarted while this job was running. No funds were released." };
+        job.status = "FAILED";
+        job.timeline.push({ status: "FAILED", at: new Date().toISOString(), note: "Interrupted by server restart" });
+      }
+      store.jobs.set(job.jobId, job);
+    }
+  } catch {
+    // No file yet (first run) or unreadable: start empty.
+  }
+  return store;
+}
+
+const globalForStore = globalThis as unknown as { __sparechangeStore?: Store };
+const store: Store = (globalForStore.__sparechangeStore ??= loadFromDisk());
+
+let writeTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Write the store to disk shortly after a change (batched, so it never slows jobs down). */
+function persistSoon(): void {
+  clearTimeout(writeTimer);
+  writeTimer = setTimeout(() => {
+    try {
+      fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
+      const data = { jobs: [...store.jobs.values()], deals: [...store.deals.values()] };
+      fs.writeFileSync(DATA_FILE, JSON.stringify(data));
+    } catch (error) {
+      console.warn("[job-store] could not save jobs to disk:", (error as Error).message);
+    }
+  }, 300);
+}
 
 export function saveJob(job: Job): void {
   store.jobs.set(job.jobId, job);
+  persistSoon();
 }
 
 export function getJob(jobId: string): Job | undefined {
@@ -42,6 +83,7 @@ export function setJobStatus(job: Job, status: JobStatus, note?: string): void {
 /** Deals that arrived through POST /api/deals/execute (e.g. from Duo 1). */
 export function rememberDeal(deal: Deal): void {
   store.deals.set(deal.dealId, deal);
+  persistSoon();
 }
 
 export function listReceivedDeals(): Deal[] {

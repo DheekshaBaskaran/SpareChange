@@ -28,7 +28,9 @@ export async function settlePayment(job: Job, options: ExecuteOptions = {}): Pro
       return { result: await mockPaymentProvider.settle(job), fallbackNote: `x402 not configured (${reason}), used mock settlement` };
     }
     try {
-      return { result: await x402PaymentProvider.settle(job) };
+      const result = await x402PaymentProvider.settle(job);
+      // Partial fallbacks (e.g. only the backfill leg) are reported, never hidden.
+      return { result, fallbackNote: result.notes?.length ? result.notes.join("; ") : undefined };
     } catch (error) {
       console.error("[payments] x402 settlement failed, falling back to mock:", error);
       return {

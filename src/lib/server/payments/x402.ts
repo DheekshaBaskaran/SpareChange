@@ -1,38 +1,79 @@
 // ─────────────────────────────────────────────────────────────
 // X402PaymentProvider: machine-to-machine settlement with Coinbase x402.
 //
-// The story:
-//   1. The buyer's agent asks the compute provider to release the
-//      verified result (GET /api/provider/settle?jobId=...).
-//   2. The provider answers "402 Payment Required" with its price,
-//      network and wallet address.
-//   3. The agent signs a USDC payment automatically (@x402/fetch)
-//      and retries the request with the payment attached.
-//   4. The x402 facilitator verifies and settles it on-chain, and the
-//      provider releases the result. We record the transaction hash.
+// Leg 1 — buyer agent (Acme) pays the compute provider (Atlas):
+//   1. The agent asks Atlas to release the verified result
+//      (GET /api/provider/settle?jobId=...).
+//   2. Atlas answers "402 Payment Required" with price, network and wallet.
+//   3. The agent signs a USDC payment automatically (@x402/fetch) and retries.
+//   4. The x402 facilitator settles it on-chain; Atlas releases the result.
 //
-// The provider side lives in src/app/api/provider/settle/route.ts.
-// The private key never leaves the server.
+// Leg 2 — multi-party deals only, if X402_PROVIDER_PRIVATE_KEY and
+// X402_REPLACEMENT_WALLET_ADDRESS are set: Atlas's agent pays the
+// replacement provider (Nova) for the backfill, the same way
+// (GET /api/provider/backfill?jobId=...). Atlas pays out of what it just
+// received, so money flows exactly like the deal graph shows.
+//
+// The provider side lives in src/lib/server/payments/x402-shared.ts.
+// Private keys never leave the server.
 // ─────────────────────────────────────────────────────────────
 
 import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { decodePaymentResponseHeader, wrapFetchWithPaymentFromConfig } from "@x402/fetch";
 import { privateKeyToAccount } from "viem/accounts";
+import type { SettlementLeg } from "../../types";
 import { getConfig } from "../config";
 import { plannedLegs, randomId, type PaymentProvider } from "./types";
+import { explorerUrl, formatUsdc, networkName, onChainAmounts } from "./x402-shared";
 
-const EXPLORERS: Record<string, string> = {
-  "eip155:84532": "https://sepolia.basescan.org/tx/",
-  "eip155:8453": "https://basescan.org/tx/",
-};
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const NETWORK_NAMES: Record<string, string> = {
-  "eip155:84532": "Base Sepolia",
-  "eip155:8453": "Base",
-};
+interface X402Payment {
+  transaction: string;
+  network: string;
+  payer: string;
+  steps: string[];
+}
 
-export function networkName(network: string): string {
-  return NETWORK_NAMES[network] ?? network;
+/**
+ * One complete x402 purchase: request → 402 → sign → retry → settled.
+ * `payerName` / `payeeName` are only used for the step descriptions.
+ */
+async function payViaX402(options: { url: string; payerKey: string; payerName: string; payeeName: string; amount: number }): Promise<X402Payment> {
+  const { x402 } = getConfig();
+  const steps: string[] = [];
+
+  // Ask without paying first, to show the payee's payment requirement.
+  const unpaid = await fetch(options.url, { signal: AbortSignal.timeout(10_000) });
+  if (unpaid.status !== 402) throw new Error(`Expected 402 from ${options.payeeName}, got ${unpaid.status}`);
+  steps.push(`${options.payeeName} responded 402 Payment Required (${formatUsdc(options.amount)} on ${networkName(x402.network)})`);
+
+  const account = privateKeyToAccount(options.payerKey as `0x${string}`);
+  const fetchWithPayment = wrapFetchWithPaymentFromConfig(fetch, {
+    schemes: [{ network: x402.network as `${string}:${string}`, client: new ExactEvmScheme(account) }],
+  });
+  steps.push(`${options.payerName} agent ${shortAddress(account.address)} signed USDC payment authorization`);
+
+  // A rejection WITHOUT a reason is usually transient (e.g. the payee's x402
+  // middleware still syncing with the facilitator right after a restart).
+  // A rejected payment was never settled, so retrying cannot double-charge.
+  let paid = await fetchWithPayment(options.url, { signal: AbortSignal.timeout(60_000) });
+  for (let retry = 1; retry <= 2 && paid.status === 402 && !rejectionReason(paid); retry++) {
+    console.warn(`[payments] ${options.payeeName} rejected payment without a reason, retrying (${retry}/2)`);
+    await wait(1500);
+    paid = await fetchWithPayment(options.url, { signal: AbortSignal.timeout(60_000) });
+  }
+  if (!paid.ok) {
+    throw new Error(`${options.payeeName} rejected payment: ${rejectionReason(paid) ?? `status ${paid.status}`}`);
+  }
+
+  const paymentHeader = paid.headers.get("PAYMENT-RESPONSE");
+  if (!paymentHeader) throw new Error(`${options.payeeName} did not return a PAYMENT-RESPONSE header`);
+  const settlement = decodePaymentResponseHeader(paymentHeader);
+  if (!settlement.success) throw new Error(settlement.errorMessage ?? "Facilitator settlement failed");
+
+  steps.push(`Facilitator settled on-chain: ${shortAddress(settlement.transaction)}`);
+  return { transaction: settlement.transaction, network: settlement.network, payer: settlement.payer ?? account.address, steps };
 }
 
 export const x402PaymentProvider: PaymentProvider = {
@@ -48,66 +89,100 @@ export const x402PaymentProvider: PaymentProvider = {
 
   async settle(job) {
     const { x402, appBaseUrl } = getConfig();
-    const resourceUrl = `${appBaseUrl}/api/provider/settle?jobId=${encodeURIComponent(job.jobId)}`;
-    const steps: string[] = [];
+    const { deal } = job;
+    const amounts = onChainAmounts(job);
+    const [buyerLeg, backfillLeg] = plannedLegs(job);
+    const query = `jobId=${encodeURIComponent(job.jobId)}`;
 
-    // Step 1: ask without paying, to show the provider's payment requirement.
-    const unpaid = await fetch(resourceUrl, { signal: AbortSignal.timeout(10_000) });
-    if (unpaid.status !== 402) throw new Error(`Expected 402 from provider, got ${unpaid.status}`);
-    steps.push(`Provider responded 402 Payment Required (${x402.settlementPrice.replace(/^\$/, "")} USDC on ${networkName(x402.network)})`);
-
-    // Step 2: the buyer agent pays automatically and retries.
-    const account = privateKeyToAccount(x402.buyerPrivateKey as `0x${string}`);
-    const fetchWithPayment = wrapFetchWithPaymentFromConfig(fetch, {
-      schemes: [{ network: x402.network as `${string}:${string}`, client: new ExactEvmScheme(account) }],
+    // ── Leg 1: buyer → provider (must succeed, or the whole payment falls back to mock) ──
+    const primary = await payViaX402({
+      url: `${appBaseUrl}/api/provider/settle?${query}`,
+      payerKey: x402.buyerPrivateKey!,
+      payerName: deal.buyer.name,
+      payeeName: deal.provider.name,
+      amount: amounts.primary,
     });
-    steps.push(`Buyer agent ${shortAddress(account.address)} signed USDC payment authorization`);
+    const steps = [...primary.steps, `${deal.provider.name} released verified result to ${deal.buyer.name}`];
+    const notes: string[] = [];
+    const legs: SettlementLeg[] = [
+      {
+        ...buyerLeg,
+        mode: "x402",
+        status: "SUCCESS",
+        transactionId: primary.transaction,
+        explorerUrl: explorerUrl(primary.network, primary.transaction),
+        onChainAmount: formatUsdc(amounts.primary),
+      },
+    ];
 
-    const paid = await fetchWithPayment(resourceUrl, { signal: AbortSignal.timeout(60_000) });
-    if (!paid.ok) {
-      // The provider explains why in the base64 PAYMENT-REQUIRED header
-      // (e.g. "insufficient_funds" if the buyer wallet has no test USDC).
-      let reason = `status ${paid.status}`;
-      try {
-        const header = paid.headers.get("PAYMENT-REQUIRED");
-        if (header) reason = JSON.parse(Buffer.from(header, "base64").toString()).error ?? reason;
-      } catch {
-        // keep the generic reason
+    // ── Leg 2: provider → replacement provider (multi-party deals) ──
+    if (backfillLeg && deal.replacementProvider) {
+      const canPayBackfill = x402.providerPrivateKey && x402.replacementWalletAddress;
+      let backfill: X402Payment | undefined;
+      if (canPayBackfill) {
+        // Retry briefly: Atlas pays out of the leg-1 funds, which may need a block to land.
+        for (let attempt = 1; attempt <= 3 && !backfill; attempt++) {
+          try {
+            backfill = await payViaX402({
+              url: `${appBaseUrl}/api/provider/backfill?${query}`,
+              payerKey: x402.providerPrivateKey!,
+              payerName: deal.provider.name,
+              payeeName: deal.replacementProvider.name,
+              amount: amounts.backfill!,
+            });
+          } catch (error) {
+            console.warn(`[payments] backfill attempt ${attempt} failed:`, (error as Error).message);
+            if (attempt === 3) notes.push(`Backfill payment via x402 failed (${(error as Error).message}); recorded as mock`);
+            else await wait(3000);
+          }
+        }
+      } else {
+        notes.push("Backfill leg recorded as mock (X402_PROVIDER_PRIVATE_KEY / X402_REPLACEMENT_WALLET_ADDRESS not set)");
       }
-      throw new Error(`Provider rejected payment: ${reason}`);
+
+      if (backfill) {
+        steps.push(...backfill.steps, `${deal.replacementProvider.name} confirmed backfill capacity for ${deal.provider.name}`);
+        legs.push({
+          ...backfillLeg,
+          mode: "x402",
+          status: "SUCCESS",
+          transactionId: backfill.transaction,
+          explorerUrl: explorerUrl(backfill.network, backfill.transaction),
+          onChainAmount: formatUsdc(amounts.backfill!),
+        });
+      } else {
+        legs.push({ ...backfillLeg, mode: "mock", status: "SUCCESS", transactionId: randomId("mock_tx_") });
+      }
     }
 
-    const paymentHeader = paid.headers.get("PAYMENT-RESPONSE");
-    if (!paymentHeader) throw new Error("Provider did not return a PAYMENT-RESPONSE header");
-    const settlement = decodePaymentResponseHeader(paymentHeader);
-    if (!settlement.success) throw new Error(settlement.errorMessage ?? "Facilitator settlement failed");
-
-    steps.push(`Facilitator settled on-chain: ${shortAddress(settlement.transaction)}`);
-    steps.push("Provider released verified result to buyer");
-
-    const explorerUrl = EXPLORERS[settlement.network] ? EXPLORERS[settlement.network] + settlement.transaction : undefined;
-    const [primaryLeg, ...otherLegs] = plannedLegs(job);
-
+    const onChainTotal = legs.filter((leg) => leg.mode === "x402").length > 1 ? amounts.primary + (amounts.backfill ?? 0) : amounts.primary;
     return {
       status: "SUCCESS",
       paymentMode: "x402",
-      transactionId: settlement.transaction,
-      amount: job.deal.price.amount,
-      currency: job.deal.price.currency,
+      transactionId: primary.transaction,
+      amount: deal.price.amount,
+      currency: deal.price.currency,
       timestamp: new Date().toISOString(),
-      network: settlement.network,
-      explorerUrl,
-      settledOnChainAmount: `${x402.settlementPrice.replace(/^\$/, "")} USDC (testnet)`,
-      payer: settlement.payer ?? account.address,
+      network: primary.network,
+      explorerUrl: explorerUrl(primary.network, primary.transaction),
+      settledOnChainAmount: `${formatUsdc(Math.round(onChainTotal * 10_000) / 10_000)} (testnet, scaled down from the deal value)`,
+      payer: primary.payer,
       steps,
-      legs: [
-        { ...primaryLeg, mode: "x402", status: "SUCCESS", transactionId: settlement.transaction, explorerUrl },
-        // The backfill leg is between two providers and is recorded, not paid on-chain, in this demo.
-        ...otherLegs.map((leg) => ({ ...leg, mode: "mock" as const, status: "SUCCESS" as const, transactionId: randomId("mock_tx_") })),
-      ],
+      legs,
+      notes,
     };
   },
 };
+
+/** The payee's reason for rejecting a payment, from the base64 PAYMENT-REQUIRED header (e.g. "insufficient_balance"). */
+function rejectionReason(response: Response): string | undefined {
+  try {
+    const header = response.headers.get("PAYMENT-REQUIRED");
+    return header ? JSON.parse(Buffer.from(header, "base64").toString()).error : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function shortAddress(value: string): string {
   return value.length > 14 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value;

@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local job history (may contain wallet addresses / tx hashes)
+/.data/

@@ -166,7 +166,7 @@ Current state of a job. Poll it (e.g. every 1s) until `status` is `COMPLETE` or 
       "network": "eip155:84532",
       "explorerUrl": "https://sepolia.basescan.org/tx/0x9b1f...",
       "legs": [
-        { "from": "Acme AI", "to": "Atlas Compute", "amount": 12.6, "currency": "USDC", "mode": "x402", "status": "SUCCESS", "transactionId": "0x9b1f..." }
+        { "from": "Acme AI", "to": "Atlas Compute", "amount": 12.6, "currency": "USDC", "mode": "x402", "status": "SUCCESS", "transactionId": "0x9b1f...", "onChainAmount": "0.01 USDC" }
       ],
       "steps": ["Provider responded 402 Payment Required ...", "..."]
     }
@@ -211,6 +211,7 @@ Current state of a job. Poll it (e.g. every 1s) until `status` is `COMPLETE` or 
 | `GET` | `/api/market` | GPU listings (Duo 1 feed → demo listings) |
 | `GET` | `/api/system` | Which executors / payment providers are live (no secrets) |
 | `GET` | `/api/provider/settle?jobId=` | The compute provider's x402-protected endpoint (used internally by the buyer agent) |
+| `GET` | `/api/provider/backfill?jobId=` | The replacement provider's x402-protected endpoint (used internally by the provider agent) |
 
 ### Optional: Duo 1 feeds that Duo 2 can pull
 

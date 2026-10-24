@@ -85,7 +85,7 @@ export function JobView({ jobId }: { jobId: string }) {
     return (
       <div className="mx-auto max-w-xl px-5 py-24 text-center">
         <h1 className="text-xl font-semibold text-ink">Job not found</h1>
-        <p className="mt-2 text-sm text-muted">Jobs are kept in memory, so they disappear when the server restarts.</p>
+        <p className="mt-2 text-sm text-muted">This job ID was not found in the job history (.data/jobs.json).</p>
         <Link href="/" className="mt-6 inline-block text-sm text-compute hover:underline">
           Back to the market
         </Link>

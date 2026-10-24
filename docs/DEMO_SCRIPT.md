@@ -24,7 +24,7 @@ Click **EXECUTE DEAL**.
 Narrate as the lifecycle moves (no need to wait in silence):
 - **Provisioning → Running:** "A worker is allocated and a real workload starts: it's training a neural network. These are live logs and accuracy climbing."
 - **Verifying:** "Before anyone gets paid, we verify the output: clean exit, the result is tied to this job, the model actually learned."
-- **Settling:** "Now the buyer's agent pays the provider automatically with x402. The provider responds HTTP 402 Payment Required, the agent signs a USDC payment, and the result is released. That's machine-to-machine commerce."
+- **Settling:** "Now the agents pay each other automatically with x402. Acme's agent pays Atlas, then Atlas's agent pays Nova for the backfill, so every party gets paid on-chain. The provider responds HTTP 402 Payment Required, the agent signs a USDC payment, and the result is released. That's machine-to-machine commerce."
 
 ### 4. Complete (~10s)
 > "Deal complete. The buyer got verified compute, both providers got paid, and here's the transaction."
@@ -45,7 +45,7 @@ Check `/system` before the demo. The job page's **"What ran for real"** panel sh
 | Verification | Always real checks on real output | – |
 | x402 payment | `PAYMENT_MODE=x402` + funded Base Sepolia wallet | Mock settlement (`mock_tx_…`, labeled "simulated") |
 | Market & deals | Duo 1 feed configured or Duo 1 pushed a deal | Seeded demo data (labeled "Demo market data") |
-| Backfill payment leg (Atlas → Nova) | – | Recorded as mock in all modes |
+| Backfill payment leg (Atlas → Nova) | x402 live + `X402_PROVIDER_PRIVATE_KEY` + `X402_REPLACEMENT_WALLET_ADDRESS` set | Recorded as mock, with a note on the job page |
 
 Be precise if asked: the demo workload runs on CPU; the "6× A100" is the contracted allocation.
 

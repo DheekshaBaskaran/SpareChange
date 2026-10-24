@@ -4,6 +4,8 @@
 // from a "use client" component — it can contain secrets.
 // ─────────────────────────────────────────────────────────────
 
+import { privateKeyToAccount } from "viem/accounts";
+
 export type ExecutionModeSetting = "auto" | "remote" | "local-docker" | "local-process" | "mock";
 export type PaymentModeSetting = "mock" | "x402";
 
@@ -27,8 +29,14 @@ export function getConfig() {
     x402: {
       // Private key of the BUYER AGENT wallet (testnet only!). Server-side only.
       buyerPrivateKey: readEnv("X402_BUYER_PRIVATE_KEY"),
-      // Wallet address of the compute provider that receives payment.
-      providerWalletAddress: readEnv("X402_PROVIDER_WALLET_ADDRESS"),
+      // Private key of the CAPACITY HOLDER's agent (Atlas). Optional, testnet only.
+      // When set, Atlas receives the buyer's payment AND pays the replacement
+      // provider (Nova) for the backfill, so every leg of the deal settles on-chain.
+      providerPrivateKey: readEnv("X402_PROVIDER_PRIVATE_KEY"),
+      // Wallet that receives the buyer's payment. Defaults to the provider agent's address.
+      providerWalletAddress: readEnv("X402_PROVIDER_WALLET_ADDRESS") ?? addressOf(readEnv("X402_PROVIDER_PRIVATE_KEY")),
+      // Wallet of the replacement provider (Nova) that receives the backfill payment. Optional.
+      replacementWalletAddress: readEnv("X402_REPLACEMENT_WALLET_ADDRESS"),
       network: readEnv("X402_NETWORK") ?? "eip155:84532", // Base Sepolia testnet
       facilitatorUrl: readEnv("X402_FACILITATOR_URL") ?? "https://x402.org/facilitator",
       // USD price charged on-chain per settlement, e.g. "0.01". Kept tiny on testnet.
@@ -44,6 +52,15 @@ export function getConfig() {
     // Base URL this app is reachable at (used by the x402 buyer agent to call the provider endpoint).
     appBaseUrl: readEnv("APP_BASE_URL") ?? `http://localhost:${process.env.PORT ?? 3402}`,
   };
+}
+
+function addressOf(privateKey: string | undefined): string | undefined {
+  if (!privateKey) return undefined;
+  try {
+    return privateKeyToAccount(privateKey as `0x${string}`).address;
+  } catch {
+    return undefined;
+  }
 }
 
 export type AppConfig = ReturnType<typeof getConfig>;

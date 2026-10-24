@@ -32,11 +32,11 @@ Verification (src/lib/server/verification.ts)
   ↓ settlePayment()
 Payments (src/lib/server/payments): x402 → mock
   ↓
-Job state in memory (src/lib/server/job-store.ts) → UI polls it
+Job state in memory + .data/jobs.json (src/lib/server/job-store.ts) → UI polls it
 ```
 
 - Types: `src/lib/types.ts`. Seed data: `src/lib/demo-data.ts`. Env config: `src/lib/server/config.ts`.
-- The x402 *provider* side is `src/app/api/provider/settle/route.ts` (protected with `withX402`); the *buyer agent* side is `src/lib/server/payments/x402.ts` (`@x402/fetch`).
+- The x402 *provider* side is `src/app/api/provider/settle` (Atlas) and `src/app/api/provider/backfill` (Nova), both built by `buildPaywall` in `src/lib/server/payments/x402-shared.ts`; the *buyer agent* side is `src/lib/server/payments/x402.ts` (`@x402/fetch`).
 - Remote worker: `worker/server.mjs` (plain Node HTTP server; runs Docker if available).
 
 ## Execution lifecycle

@@ -17,7 +17,7 @@ Example multi-party deal: **Atlas Compute** has 6 idle A100s it already reserved
 - **Compute executors** with automatic fallback: remote worker → local Docker → local process → simulated.
 - **A real workload** (`worker/workload.mjs`): trains a small neural network (~10–14 billion floating-point ops), and reports progress and a result bound to the job ID.
 - **Verification**: exit code, log markers, job ID binding, loss drop, held-out accuracy ≥ 85%. No verification, no payment.
-- **Payments** with fallback: Coinbase **x402** (buyer agent pays the provider's paywalled endpoint on Base Sepolia) → mock settlement.
+- **Payments** with fallback: Coinbase **x402** on Base Sepolia → mock settlement. In the three-party deal both legs settle on-chain: Acme's agent pays Atlas, then Atlas's agent pays Nova for the backfill out of what it just received.
 
 ## Architecture
 
@@ -104,13 +104,20 @@ If the remote worker is unreachable, SpareChange falls back to local execution a
 ```
 PAYMENT_MODE=x402
 X402_BUYER_PRIVATE_KEY=0x...            # testnet only, server-side only
-X402_PROVIDER_WALLET_ADDRESS=0x...
+X402_PROVIDER_WALLET_ADDRESS=0x...      # or set X402_PROVIDER_PRIVATE_KEY (below) instead
 X402_NETWORK=eip155:84532
 X402_SETTLEMENT_PRICE=0.01              # no "$" in .env files
 ```
-4. Check http://localhost:3402/system: payment should read "Coinbase x402".
+4. Optional, for the three-party deal: give Atlas its own agent wallet and Nova a receiving address, so the backfill leg is paid on-chain too. Atlas needs no funding: it pays Nova out of the buyer's payment.
+```
+X402_PROVIDER_PRIVATE_KEY=0x...         # Atlas's agent (testnet only); its address receives the buyer's payment
+X402_REPLACEMENT_WALLET_ADDRESS=0x...   # Nova
+```
+5. Run a deal. The header switches to **"x402 · live"** only after a real x402 payment succeeds.
 
-If x402 is not configured, or the payment fails (e.g. the wallet is empty), the job still completes using mock settlement, and the job page says exactly why.
+On-chain amounts are scaled down for testnet: the buyer pays `X402_SETTLEMENT_PRICE` (0.01 USDC) for the 12.60 USDC deal, and Atlas pays Nova the same fraction of that (0.0068 USDC for the 8.52 USDC backfill). The UI shows both the deal amount and the on-chain amount for each leg.
+
+If x402 is not configured, or the buyer payment fails (e.g. the wallet is empty), the job still completes using mock settlement, and the job page says exactly why.
 
 ### Duo 1 live data
 ```
@@ -149,5 +156,6 @@ If pages get stuck on a loading state in dev: stop the server, run `rm -rf .next
 
 ## Notes
 
-- Jobs are stored in memory: restarting the server clears them (demo data always reloads).
+- `npm audit` reports "high" warnings for `zod`, a dependency of the x402 packages (they require zod 3, and every zod 3 release is flagged). It affects validation of very large inputs; the risk for this demo is low, and it will clear when x402 moves to zod 4.
+- Job history is saved to `.data/jobs.json` (gitignored), so it survives restarts. Delete that file to start fresh. A job that was running during a restart is marked FAILED with that reason.
 - The demo workload runs on CPU; the GPU model/count shown is the contracted allocation from the deal. The UI labels the actual executor (`local-process`, `local-docker`, `remote`, or `simulated`).

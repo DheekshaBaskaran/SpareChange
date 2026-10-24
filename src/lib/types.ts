@@ -159,6 +159,8 @@ export interface SettlementLeg {
   status: "SUCCESS" | "FAILED";
   transactionId: string;
   explorerUrl?: string;
+  /** For x402 legs: the (scaled-down testnet) amount that actually moved on-chain, e.g. "0.01 USDC". */
+  onChainAmount?: string;
 }
 
 export interface PaymentResult {
@@ -178,6 +180,8 @@ export interface PaymentResult {
   legs: SettlementLeg[];
   /** Step-by-step trace of the x402 handshake, shown in the UI. */
   steps: string[];
+  /** Plain-English notes, e.g. when one leg had to fall back to mock. */
+  notes?: string[];
 }
 
 export interface TimelineEntry {

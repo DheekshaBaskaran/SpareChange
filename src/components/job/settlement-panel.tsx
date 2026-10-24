@@ -11,7 +11,7 @@ const X402_PLANNED_STEPS = [
   "Provider responds 402 Payment Required",
   "Buyer agent signs a USDC payment automatically",
   "x402 facilitator settles on-chain",
-  "Provider releases the result",
+  "Provider releases the result (and pays its backfill, in multi-party deals)",
 ];
 
 const MOCK_PLANNED_STEPS = ["Buyer accepts verified result", "Settlement legs recorded"];
@@ -81,9 +81,18 @@ export function SettlementPanel({ job }: { job: Job }) {
                     <td className="px-5 py-2.5 text-ink-2">
                       {leg.from} <span className="text-faint">→</span> {leg.to}
                     </td>
-                    <td className="tabular px-3 py-2.5 text-right text-ink">{money(leg.amount, leg.currency)}</td>
+                    <td className="tabular px-3 py-2.5 text-right text-ink">
+                      {money(leg.amount, leg.currency)}
+                      {leg.onChainAmount && <div className="text-[11px] text-faint">on-chain {leg.onChainAmount}</div>}
+                    </td>
                     <td className="px-5 py-2.5 text-right">
-                      <Badge tone={leg.mode === "x402" ? "value" : "neutral"}>{leg.mode === "x402" ? `x402 · ${shortHash(leg.transactionId, 6, 4)}` : "mock"}</Badge>
+                      {leg.mode === "x402" && leg.explorerUrl ? (
+                        <a href={leg.explorerUrl} target="_blank" rel="noreferrer" title="View this payment on the block explorer">
+                          <Badge tone="value" className="whitespace-nowrap">x402 · {shortHash(leg.transactionId, 6, 4)} ↗</Badge>
+                        </a>
+                      ) : (
+                        <Badge tone={leg.mode === "x402" ? "value" : "neutral"}>{leg.mode === "x402" ? `x402 · ${shortHash(leg.transactionId, 6, 4)}` : "mock"}</Badge>
+                      )}
                     </td>
                   </tr>
                 ))}

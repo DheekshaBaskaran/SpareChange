@@ -106,6 +106,21 @@ function HeaderLayout({ pathname, system }: { pathname: string; system: SystemSu
           )}
         </Link>
       </div>
+      {/* Phones: the main nav as a compact second row */}
+      <nav className="flex gap-1 overflow-x-auto px-3 pb-2 md:hidden" aria-label="Main (mobile)">
+        {NAV.map((item) => {
+          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.match ?? item.href);
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={cx("shrink-0 rounded-md px-3 py-1 text-sm", active ? "bg-surface-3 text-ink" : "text-muted")}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
     </header>
   );
 }
