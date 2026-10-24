@@ -183,6 +183,7 @@ async def run_ingestion(
                     run_id=run_id,
                     observations=observations,
                     bucket_seconds=settings.market_observation_bucket_seconds,
+                    reobserve_seconds=settings.market_reobserve_seconds,
                 )
         except Exception as exc:
             logger.exception("failed to persist ingestion results provider=%s", provider)

@@ -137,8 +137,9 @@ Admin ingestion (`Authorization: Bearer $MARKET_ADMIN_TOKEN`):
   create executable capacity.
 - Every observation carries provider, source channel, source URL, source record ID, observed and
   ingested timestamps, raw hash, and trust tier.
-- Dedupe identity is `(provider, provider_offer_id, 5-minute bucket)`. The current-offer view
-  returns the newest observation per identity, with provider API winning ties.
+- Dedupe identity is `(provider, provider_offer_id, 5-minute bucket)`. An unchanged content hash
+  inside `MARKET_REOBSERVE_SECONDS` is recorded as a duplicate instead of a new observation. The
+  current-offer view returns the newest observation per identity, with provider API winning ties.
 - Freshness is computed from provider TTL: `fresh`, `stale`, `expired`. Consumers that need live
   prices must filter `freshness=fresh`; history intentionally includes older observations.
 - Price fields: total offer price (`price_per_hour_*`) and normalized comparable price
@@ -148,18 +149,19 @@ Admin ingestion (`Authorization: Bearer $MARKET_ADMIN_TOKEN`):
 
 | Capability | Status | Evidence |
 |---|---|---|
-| Vast.ai live collection | Verified | 30–200 live offers ingested into TimescaleDB |
-| RunPod live collection | Verified | 42 advertised offers across 21 GPU types |
-| Apify Actor build + deploy | Verified | Actor `relay-gpu-market-intelligence` (`SyLVZKpczziqmvvqF`) built `0.1.2` |
-| Apify Actor remote run | Verified | 60 items (Vast.ai + RunPod), ingested through `mode=items` |
-| Dedupe / freshness / history / summary | Verified | Integration tests and live API queries |
-| Local TimescaleDB migrations | Verified | TimescaleDB 2.31, hypertable + CAGG + policies applied |
-| Tiger Cloud (`relay-market-data`) | Blocked | Service exists and is READY, but the local MCP connection has no DB password; set `DATABASE_URL` to verify against cloud |
+| Vast.ai live collection | Verified | 100+ live offers ingested into Tiger Cloud (109 current at final check) |
+| RunPod live collection | Verified | 46 current advertised offers across GPU types |
+| Apify Actor build + deploy | Verified | Actor `relay-gpu-market-intelligence` (`SyLVZKpczziqmvvqF`) built `0.1.3` |
+| Apify Actor remote run | Verified | 60 items (Vast.ai + RunPod) plus a 4-item latest-build run, ingested through `mode=items` |
+| Apify API mode (`mode=apify`) | Implemented, blocked | No `APIFY_TOKEN` available locally; the Actor itself and the dataset ingestion path are verified |
+| Dedupe / freshness / history / summary | Verified | Integration tests and live API queries on Tiger Cloud |
+| Tiger Cloud (`relay-market-data`) | Verified | PostgreSQL 18.6 + TimescaleDB 2.31; 203 observations, 155 current offers, 66 hourly CAGG rows, 42 tests passing |
+| Local TimescaleDB migrations | Verified | Same migrations on a `timescaledb:latest-pg17` container, used as a repeatable harness |
 | Lambda adapter | Implemented, blocked | Requires `LAMBDA_API_KEY` |
 | TensorDock adapter | Implemented, blocked | Requires `TENSORDOCK_API_KEY` |
 
-The local verification database is a `timescale/timescaledb:latest-pg17` container on port 55432.
-It is a test harness only; Tiger Cloud remains the canonical target.
+The Tiger Cloud service `relay-market-data` is the canonical target. The local container remains a
+test harness for offline work; `.env` selects whichever database the service should use.
 
 ## Tests
 

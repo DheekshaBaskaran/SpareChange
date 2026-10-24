@@ -6,7 +6,7 @@ import base64
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -147,11 +147,13 @@ async def insert_observations(
     run_id: UUID,
     observations: list[NormalizedObservation],
     bucket_seconds: int = 300,
+    reobserve_seconds: int = 300,
 ) -> InsertStats:
     """Append observations with per-offer, per-bucket deduplication.
 
-    The dedupe ledger is a regular table with a unique key. A savepoint per
-    record means one malformed row cannot roll back the whole batch.
+    The dedupe ledger is a regular table with a unique key. A content hash
+    suppresses an unchanged republish inside the re-observation window. A
+    savepoint per record means one malformed row cannot roll back the batch.
     """
     stats = InsertStats()
     for observation in observations:
@@ -160,6 +162,27 @@ async def insert_observations(
         fingerprint = observation_fingerprint(observation)
         try:
             async with conn.transaction():
+                if reobserve_seconds > 0:
+                    unchanged = await conn.execute(
+                        """
+                        SELECT 1
+                        FROM market_observation_keys
+                        WHERE provider = %s
+                          AND provider_offer_id = %s
+                          AND content_hash = %s
+                          AND bucket_start > %s
+                        LIMIT 1
+                        """,
+                        (
+                            observation.provider,
+                            observation.provider_offer_id,
+                            fingerprint,
+                            bucket - timedelta(seconds=reobserve_seconds),
+                        ),
+                    )
+                    if await unchanged.fetchone() is not None:
+                        stats.duplicate += 1
+                        continue
                 cursor = await conn.execute(
                     """
                     INSERT INTO market_observation_keys
@@ -669,7 +692,9 @@ async def fetch_freshness(conn: AsyncConnection) -> list[dict[str, Any]]:
         elif row["consecutive_failures"] and row["consecutive_failures"] >= 3:
             row["state"] = "failed"
         elif row["last_success_at"] is None:
-            row["state"] = "failed" if row["last_attempt_at"] else "never_ingested"
+            row["state"] = (
+                "failed" if row["consecutive_failures"] else "never_ingested"
+            )
         elif row["consecutive_failures"] and row["consecutive_failures"] > 0:
             row["state"] = "degraded"
         elif (

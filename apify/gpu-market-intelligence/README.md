@@ -81,7 +81,7 @@ npx apify-cli call SyLVZKpczziqmvvqF \
 ```
 
 Deployment requires an authenticated Apify CLI session. The Actor in this repository was built as
-version `0.1.2` and run remotely; see the service README verification table.
+version `0.1.3` and run remotely; see the service README verification table.
 
 ## Ingestion
 
