@@ -1,0 +1,15 @@
+{
+  "actorSpecification": 1,
+  "name": "relay-gpu-market-intelligence",
+  "title": "Relay GPU Market Intelligence",
+  "description": "Collects permitted public GPU listings from Vast.ai, RunPod, Lambda, and TensorDock with source provenance, timestamps, and normalized prices. Public listings are reference prices, not executable capacity.",
+  "version": "0.1",
+  "buildTag": "latest",
+  "meta": {
+    "templateId": "javascript-start"
+  },
+  "input": "./input_schema.json",
+  "storages": {
+    "dataset": "./dataset_schema.json"
+  }
+}

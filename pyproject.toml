@@ -1,0 +1,36 @@
+[project]
+name = "relay-market-intelligence"
+version = "1.0.0"
+description = "Relay GPU market intelligence: Apify collection, normalized provider offers, Tiger Data history, and read APIs."
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "uvicorn[standard]>=0.34,<1.0",
+  "httpx>=0.28,<1.0",
+  "pydantic>=2.10,<3.0",
+  "pydantic-settings>=2.7,<3.0",
+  "psycopg[binary,pool]>=3.2.10,<4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9.0",
+  "pytest-asyncio>=0.25,<1.0",
+]
+
+[project.scripts]
+relay-market-api = "market_intelligence.runtime:main"
+relay-market-ingest = "market_intelligence.scripts.run_ingestion:main"
+relay-market-export-openapi = "market_intelligence.scripts.export_openapi:main"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["market_intelligence", "market_intelligence.api", "market_intelligence.core", "market_intelligence.providers", "market_intelligence.scripts"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"

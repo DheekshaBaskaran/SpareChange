@@ -1,0 +1,38 @@
+{
+  "actorSpecification": 1,
+  "fields": {},
+  "views": {
+    "overview": {
+      "title": "GPU market offers",
+      "transformation": {
+        "fields": [
+          "provider",
+          "gpu_model",
+          "gpu_model_normalized",
+          "gpu_count",
+          "vram_gb",
+          "price_per_hour_usd",
+          "region",
+          "availability_scope",
+          "observed_at",
+          "source_url"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "provider": { "label": "Provider" },
+          "gpu_model": { "label": "GPU" },
+          "gpu_model_normalized": { "label": "Normalized" },
+          "gpu_count": { "label": "Count" },
+          "vram_gb": { "label": "VRAM GB" },
+          "price_per_hour_usd": { "label": "USD/hour" },
+          "region": { "label": "Region" },
+          "availability_scope": { "label": "Scope" },
+          "observed_at": { "label": "Observed" },
+          "source_url": { "label": "Source", "format": "link" }
+        }
+      }
+    }
+  }
+}

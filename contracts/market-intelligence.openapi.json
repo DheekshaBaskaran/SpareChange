@@ -1,0 +1,1867 @@
+{
+  "components": {
+    "schemas": {
+      "FreshnessReport": {
+        "properties": {
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderFreshness"
+            },
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "providers",
+          "generated_at"
+        ],
+        "title": "FreshnessReport",
+        "type": "object"
+      },
+      "GpuSummary": {
+        "properties": {
+          "change_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Percent"
+          },
+          "fresh_offer_count": {
+            "title": "Fresh Offer Count",
+            "type": "integer"
+          },
+          "gpu_model_normalized": {
+            "title": "Gpu Model Normalized",
+            "type": "string"
+          },
+          "median_price_per_gpu_hour_micros": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Price Per Gpu Hour Micros"
+          },
+          "min_price_per_gpu_hour_micros": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Price Per Gpu Hour Micros"
+          },
+          "provider_count": {
+            "title": "Provider Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "gpu_model_normalized",
+          "provider_count",
+          "fresh_offer_count",
+          "median_price_per_gpu_hour_micros",
+          "min_price_per_gpu_hour_micros",
+          "change_percent"
+        ],
+        "title": "GpuSummary",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "IngestionBatchResponse": {
+        "properties": {
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/IngestionRunSummary"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "runs"
+        ],
+        "title": "IngestionBatchResponse",
+        "type": "object"
+      },
+      "IngestionRunDetail": {
+        "properties": {
+          "adapter": {
+            "title": "Adapter",
+            "type": "string"
+          },
+          "diagnostics": {
+            "additionalProperties": true,
+            "title": "Diagnostics",
+            "type": "object"
+          },
+          "duplicate": {
+            "title": "Duplicate",
+            "type": "integer"
+          },
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "fetched": {
+            "title": "Fetched",
+            "type": "integer"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "inserted": {
+            "title": "Inserted",
+            "type": "integer"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "rejected": {
+            "title": "Rejected",
+            "type": "integer"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "succeeded",
+              "partial",
+              "failed",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "provider",
+          "status",
+          "started_at",
+          "finished_at",
+          "fetched",
+          "inserted",
+          "duplicate",
+          "rejected",
+          "errors",
+          "adapter",
+          "trigger",
+          "idempotency_key",
+          "request_id",
+          "diagnostics"
+        ],
+        "title": "IngestionRunDetail",
+        "type": "object"
+      },
+      "IngestionRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "apify_actor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apify Actor Id"
+          },
+          "apify_input": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apify Input"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
+          "limit_per_provider": {
+            "default": 200,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Limit Per Provider",
+            "type": "integer"
+          },
+          "mode": {
+            "default": "direct",
+            "enum": [
+              "direct",
+              "apify",
+              "items"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "provider": {
+            "default": "all",
+            "description": "canonical provider key or 'all'",
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "title": "IngestionRunRequest",
+        "type": "object"
+      },
+      "IngestionRunSummary": {
+        "properties": {
+          "duplicate": {
+            "title": "Duplicate",
+            "type": "integer"
+          },
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "fetched": {
+            "title": "Fetched",
+            "type": "integer"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "inserted": {
+            "title": "Inserted",
+            "type": "integer"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "rejected": {
+            "title": "Rejected",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "succeeded",
+              "partial",
+              "failed",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "provider",
+          "status",
+          "started_at",
+          "finished_at",
+          "fetched",
+          "inserted",
+          "duplicate",
+          "rejected",
+          "errors"
+        ],
+        "title": "IngestionRunSummary",
+        "type": "object"
+      },
+      "MarketOffer": {
+        "properties": {
+          "availability_scope": {
+            "title": "Availability Scope",
+            "type": "string"
+          },
+          "billing_scope": {
+            "title": "Billing Scope",
+            "type": "string"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "cpu_cores": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Cores"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "disk_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disk Gb"
+          },
+          "executable": {
+            "title": "Executable",
+            "type": "boolean"
+          },
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "freshness": {
+            "enum": [
+              "fresh",
+              "stale",
+              "expired"
+            ],
+            "title": "Freshness",
+            "type": "string"
+          },
+          "gpu_count": {
+            "title": "Gpu Count",
+            "type": "integer"
+          },
+          "gpu_model": {
+            "title": "Gpu Model",
+            "type": "string"
+          },
+          "gpu_model_normalized": {
+            "title": "Gpu Model Normalized",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ingested_at": {
+            "title": "Ingested At",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "observed_at": {
+            "title": "Observed At",
+            "type": "string"
+          },
+          "price_per_gpu_hour_micros": {
+            "title": "Price Per Gpu Hour Micros",
+            "type": "integer"
+          },
+          "price_per_gpu_hour_minor": {
+            "title": "Price Per Gpu Hour Minor",
+            "type": "integer"
+          },
+          "price_per_hour_micros": {
+            "title": "Price Per Hour Micros",
+            "type": "integer"
+          },
+          "price_per_hour_minor": {
+            "title": "Price Per Hour Minor",
+            "type": "integer"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_offer_id": {
+            "title": "Provider Offer Id",
+            "type": "string"
+          },
+          "ram_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ram Gb"
+          },
+          "raw_hash": {
+            "title": "Raw Hash",
+            "type": "string"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "reliability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reliability"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "source_record_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Record Id"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "trust_tier": {
+            "title": "Trust Tier",
+            "type": "string"
+          },
+          "vram_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vram Gb"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "provider_offer_id",
+          "gpu_model",
+          "gpu_model_normalized",
+          "gpu_count",
+          "vram_gb",
+          "cpu_cores",
+          "ram_gb",
+          "disk_gb",
+          "region",
+          "country",
+          "price_per_hour_minor",
+          "price_per_hour_micros",
+          "price_per_gpu_hour_minor",
+          "price_per_gpu_hour_micros",
+          "currency",
+          "billing_scope",
+          "availability_scope",
+          "executable",
+          "source",
+          "source_url",
+          "source_record_id",
+          "trust_tier",
+          "freshness",
+          "observed_at",
+          "expires_at",
+          "ingested_at",
+          "reliability",
+          "raw_hash"
+        ],
+        "title": "MarketOffer",
+        "type": "object"
+      },
+      "MarketOfferPage": {
+        "properties": {
+          "filters": {
+            "additionalProperties": true,
+            "title": "Filters",
+            "type": "object"
+          },
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MarketOffer"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "generated_at"
+        ],
+        "title": "MarketOfferPage",
+        "type": "object"
+      },
+      "MarketSummary": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "gpus": {
+            "items": {
+              "$ref": "#/components/schemas/GpuSummary"
+            },
+            "title": "Gpus",
+            "type": "array"
+          },
+          "offers": {
+            "$ref": "#/components/schemas/OfferCounts"
+          },
+          "window": {
+            "title": "Window",
+            "type": "string"
+          }
+        },
+        "required": [
+          "generated_at",
+          "window",
+          "currency",
+          "offers",
+          "gpus"
+        ],
+        "title": "MarketSummary",
+        "type": "object"
+      },
+      "OfferCounts": {
+        "properties": {
+          "executable": {
+            "title": "Executable",
+            "type": "integer"
+          },
+          "fresh": {
+            "title": "Fresh",
+            "type": "integer"
+          },
+          "providers": {
+            "title": "Providers",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "fresh",
+          "providers",
+          "executable"
+        ],
+        "title": "OfferCounts",
+        "type": "object"
+      },
+      "PriceHistory": {
+        "properties": {
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "from": {
+            "title": "From",
+            "type": "string"
+          },
+          "gpu_model": {
+            "title": "Gpu Model",
+            "type": "string"
+          },
+          "gpu_model_normalized": {
+            "title": "Gpu Model Normalized",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/PricePoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "to": {
+            "title": "To",
+            "type": "string"
+          },
+          "trend": {
+            "$ref": "#/components/schemas/PriceTrend"
+          }
+        },
+        "required": [
+          "gpu_model",
+          "gpu_model_normalized",
+          "provider",
+          "currency",
+          "bucket",
+          "from",
+          "to",
+          "points",
+          "trend"
+        ],
+        "title": "PriceHistory",
+        "type": "object"
+      },
+      "PricePoint": {
+        "properties": {
+          "avg_price_per_hour_micros": {
+            "title": "Avg Price Per Hour Micros",
+            "type": "integer"
+          },
+          "bucket_start": {
+            "title": "Bucket Start",
+            "type": "string"
+          },
+          "max_price_per_hour_micros": {
+            "title": "Max Price Per Hour Micros",
+            "type": "integer"
+          },
+          "median_price_per_hour_micros": {
+            "title": "Median Price Per Hour Micros",
+            "type": "integer"
+          },
+          "min_price_per_hour_micros": {
+            "title": "Min Price Per Hour Micros",
+            "type": "integer"
+          },
+          "p25_price_per_hour_micros": {
+            "title": "P25 Price Per Hour Micros",
+            "type": "integer"
+          },
+          "p75_price_per_hour_micros": {
+            "title": "P75 Price Per Hour Micros",
+            "type": "integer"
+          },
+          "sample_count": {
+            "title": "Sample Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bucket_start",
+          "sample_count",
+          "min_price_per_hour_micros",
+          "p25_price_per_hour_micros",
+          "median_price_per_hour_micros",
+          "p75_price_per_hour_micros",
+          "max_price_per_hour_micros",
+          "avg_price_per_hour_micros"
+        ],
+        "title": "PricePoint",
+        "type": "object"
+      },
+      "PriceTrend": {
+        "properties": {
+          "change_micros": {
+            "title": "Change Micros",
+            "type": "integer"
+          },
+          "change_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Percent"
+          },
+          "direction": {
+            "enum": [
+              "up",
+              "down",
+              "flat"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "first_median_micros": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Median Micros"
+          },
+          "last_median_micros": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Median Micros"
+          }
+        },
+        "required": [
+          "direction",
+          "change_micros",
+          "change_percent",
+          "first_median_micros",
+          "last_median_micros"
+        ],
+        "title": "PriceTrend",
+        "type": "object"
+      },
+      "ProviderFreshness": {
+        "properties": {
+          "consecutive_failures": {
+            "title": "Consecutive Failures",
+            "type": "integer"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "fresh_offer_count": {
+            "title": "Fresh Offer Count",
+            "type": "integer"
+          },
+          "last_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Attempt At"
+          },
+          "last_error_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error At"
+          },
+          "last_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run Id"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "oldest_fresh_observed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Fresh Observed At"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "stale_offer_count": {
+            "title": "Stale Offer Count",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "healthy",
+              "degraded",
+              "failed",
+              "disabled",
+              "never_ingested"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "display_name",
+          "enabled",
+          "last_attempt_at",
+          "last_success_at",
+          "last_error_at",
+          "consecutive_failures",
+          "fresh_offer_count",
+          "stale_offer_count",
+          "oldest_fresh_observed_at",
+          "last_run_id",
+          "state"
+        ],
+        "title": "ProviderFreshness",
+        "type": "object"
+      },
+      "ProviderRecord": {
+        "properties": {
+          "collection_mode": {
+            "title": "Collection Mode",
+            "type": "string"
+          },
+          "consecutive_failures": {
+            "title": "Consecutive Failures",
+            "type": "integer"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "freshness_ttl_seconds": {
+            "title": "Freshness Ttl Seconds",
+            "type": "integer"
+          },
+          "last_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Attempt At"
+          },
+          "last_error_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error At"
+          },
+          "last_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run Id"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "trust_tier": {
+            "title": "Trust Tier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "display_name",
+          "enabled",
+          "collection_mode",
+          "trust_tier",
+          "freshness_ttl_seconds",
+          "last_attempt_at",
+          "last_success_at",
+          "last_error_at",
+          "consecutive_failures",
+          "last_run_id"
+        ],
+        "title": "ProviderRecord",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Normalized GPU market offers, provenance, freshness, and historical pricing for Relay. Public listings are reference prices, not executable capacity. Canonical storage is Tiger Data; Elastic indexes selected records read-only.",
+    "title": "Relay Market Intelligence",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "service_info__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Service Info  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Service Info",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Healthz Healthz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Healthz",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readyz",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/admin/ingestion/runs": {
+      "post": {
+        "operationId": "start_ingestion_run_v1_admin_ingestion_runs_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestionRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionBatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Ingestion Run",
+        "tags": [
+          "admin-ingestion"
+        ]
+      }
+    },
+    "/v1/admin/ingestion/runs/{run_id}": {
+      "get": {
+        "operationId": "get_ingestion_run_v1_admin_ingestion_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionRunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Ingestion Run",
+        "tags": [
+          "admin-ingestion"
+        ]
+      }
+    },
+    "/v1/market/freshness": {
+      "get": {
+        "operationId": "get_freshness_v1_market_freshness_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreshnessReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Freshness",
+        "tags": [
+          "market"
+        ]
+      }
+    },
+    "/v1/market/history": {
+      "get": {
+        "operationId": "get_history_v1_market_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "gpu_model",
+            "required": true,
+            "schema": {
+              "maxLength": 80,
+              "minLength": 1,
+              "title": "Gpu Model",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bucket",
+            "required": false,
+            "schema": {
+              "default": "15m",
+              "enum": [
+                "15m",
+                "1h",
+                "6h",
+                "1d"
+              ],
+              "title": "Bucket",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "default": "USD",
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceHistory"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get History",
+        "tags": [
+          "market"
+        ]
+      }
+    },
+    "/v1/market/offers": {
+      "get": {
+        "operationId": "list_offers_v1_market_offers_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          },
+          {
+            "in": "query",
+            "name": "gpu_model",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gpu Model"
+            }
+          },
+          {
+            "in": "query",
+            "name": "gpu_match",
+            "required": false,
+            "schema": {
+              "default": "exact",
+              "enum": [
+                "exact",
+                "contains"
+              ],
+              "title": "Gpu Match",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_vram_gb",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Vram Gb"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_price_per_gpu_hour_minor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Price Per Gpu Hour Minor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "region",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Region"
+            }
+          },
+          {
+            "in": "query",
+            "name": "country",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2,
+                  "minLength": 2,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          },
+          {
+            "in": "query",
+            "name": "availability_scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "live_inventory",
+                    "advertised"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Availability Scope"
+            }
+          },
+          {
+            "in": "query",
+            "name": "executable",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Executable"
+            }
+          },
+          {
+            "in": "query",
+            "name": "freshness",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Freshness"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_stale",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Stale",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "price",
+              "enum": [
+                "price",
+                "observed_at",
+                "reliability"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketOfferPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Offers",
+        "tags": [
+          "market"
+        ]
+      }
+    },
+    "/v1/market/offers/{offer_id}": {
+      "get": {
+        "operationId": "get_offer_v1_market_offers__offer_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "offer_id",
+            "required": true,
+            "schema": {
+              "title": "Offer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketOffer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Offer",
+        "tags": [
+          "market"
+        ]
+      }
+    },
+    "/v1/market/providers": {
+      "get": {
+        "operationId": "get_providers_v1_market_providers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderRecord"
+                  },
+                  "title": "Response Get Providers V1 Market Providers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Providers",
+        "tags": [
+          "market"
+        ]
+      }
+    },
+    "/v1/market/summary": {
+      "get": {
+        "operationId": "get_summary_v1_market_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "default": "24h",
+              "enum": [
+                "1h",
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "title": "Window",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Summary",
+        "tags": [
+          "market"
+        ]
+      }
+    }
+  }
+}

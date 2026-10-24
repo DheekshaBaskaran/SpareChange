@@ -1,0 +1,40 @@
+{
+  "title": "Relay GPU Market Intelligence input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "providers": {
+      "title": "Providers",
+      "type": "array",
+      "description": "Public providers to collect. Lambda and TensorDock require their API keys as Actor environment variables.",
+      "editor": "stringList",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      },
+      "default": ["vastai", "runpod"]
+    },
+    "maxItemsPerProvider": {
+      "title": "Maximum offers per provider",
+      "type": "integer",
+      "description": "Upper bound on normalized offers emitted per provider.",
+      "default": 200,
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "minGpuMemoryGb": {
+      "title": "Minimum VRAM (GB)",
+      "type": "number",
+      "description": "Drop offers whose reported VRAM is below this value. Unknown VRAM is retained.",
+      "default": 0,
+      "minimum": 0
+    },
+    "includeRawPayload": {
+      "title": "Include raw provider payload",
+      "type": "boolean",
+      "description": "Include the source record for provenance. Disable to reduce dataset size.",
+      "default": true
+    }
+  },
+  "required": []
+}
