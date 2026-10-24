@@ -99,7 +99,7 @@ If the remote worker is unreachable, SpareChange falls back to local execution a
 
 ### x402 mode (Coinbase, Base Sepolia testnet)
 1. Create a **testnet-only** buyer wallet. Any EVM private key works (e.g. `node -e "console.log(require('viem/accounts').generatePrivateKey())"`). Never use a wallet that holds real funds.
-2. Fund the buyer address with free test USDC from the Circle faucet: https://faucet.circle.com (choose **Base Sepolia**). No ETH is needed: the facilitator pays gas.
+2. Fund the buyer address with free test USDC from the Circle faucet: https://faucet.circle.com. Pick **Base Sepolia** in the network dropdown (the faucet may default to Arc testnet, which the public x402.org facilitator does not support). No ETH is needed: the facilitator pays gas. Each settlement costs 0.01 test USDC.
 3. Put a provider wallet address (any address you control) in `.env.local`:
 ```
 PAYMENT_MODE=x402

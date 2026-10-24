@@ -54,7 +54,7 @@ export const x402PaymentProvider: PaymentProvider = {
     // Step 1: ask without paying, to show the provider's payment requirement.
     const unpaid = await fetch(resourceUrl, { signal: AbortSignal.timeout(10_000) });
     if (unpaid.status !== 402) throw new Error(`Expected 402 from provider, got ${unpaid.status}`);
-    steps.push(`Provider responded 402 Payment Required (${x402.settlementPrice} USDC on ${networkName(x402.network)})`);
+    steps.push(`Provider responded 402 Payment Required (${x402.settlementPrice.replace(/^\$/, "")} USDC on ${networkName(x402.network)})`);
 
     // Step 2: the buyer agent pays automatically and retries.
     const account = privateKeyToAccount(x402.buyerPrivateKey as `0x${string}`);
@@ -97,7 +97,7 @@ export const x402PaymentProvider: PaymentProvider = {
       timestamp: new Date().toISOString(),
       network: settlement.network,
       explorerUrl,
-      settledOnChainAmount: `${x402.settlementPrice} USDC (testnet)`,
+      settledOnChainAmount: `${x402.settlementPrice.replace(/^\$/, "")} USDC (testnet)`,
       payer: settlement.payer ?? account.address,
       steps,
       legs: [
