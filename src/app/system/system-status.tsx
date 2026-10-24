@@ -11,6 +11,7 @@ interface SystemData {
   payments: {
     paymentMode: string;
     x402: { configured: boolean; reason?: string; network: string; settlementPrice: string };
+    lastOutcome: { state: "planned" | "live" | "simulated"; label: string; transactionId?: string };
   };
   duo1: { dealsFeedConfigured: boolean; marketFeedConfigured: boolean };
 }
@@ -28,7 +29,8 @@ export function SystemStatus() {
   if (!data) return <div className="h-64 animate-pulse rounded-xl bg-surface" aria-busy />;
 
   const activeExecutor = data.executors.find((executor) => executor.available);
-  const x402Active = data.payments.paymentMode === "x402" && data.payments.x402.configured;
+  const x402Selected = data.payments.paymentMode === "x402" && data.payments.x402.configured;
+  const lastOutcome = data.payments.lastOutcome;
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -63,11 +65,17 @@ export function SystemStatus() {
         <Panel>
           <PanelHeader eyebrow={`PAYMENT_MODE=${data.payments.paymentMode}`} title="Payment settlement" />
           <div className="space-y-3 px-5 py-4 text-sm">
-            <Row label="Active provider" value={x402Active ? "Coinbase x402" : "Mock settlement"} live={x402Active} />
+            {/* Configuration alone is not proof: "live" only after a real x402 transaction. */}
+            <Row label="Configured provider" value={x402Selected ? "Coinbase x402 (falls back to mock)" : "Mock settlement"} live={false} />
+            <Row
+              label="Last settlement"
+              value={lastOutcome.state === "planned" ? "None yet" : lastOutcome.label}
+              live={lastOutcome.state === "live"}
+            />
             <Row
               label="x402"
               value={data.payments.x402.configured ? `Configured · ${data.payments.x402.network} · ${data.payments.x402.settlementPrice}` : data.payments.x402.reason ?? "Not configured"}
-              live={data.payments.x402.configured}
+              live={false}
             />
           </div>
         </Panel>

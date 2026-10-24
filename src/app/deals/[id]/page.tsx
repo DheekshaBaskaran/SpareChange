@@ -118,7 +118,7 @@ async function DealDetail({ params }: { params: Promise<{ id: string }> }) {
               <p className="mt-3 text-center text-xs leading-5 text-faint">
                 Payment is released only after the workload is verified.
                 <br />
-                Settlement: {settlesWithX402 ? "Coinbase x402 (USDC)" : "mock settlement (demo)"}
+                Settlement: {settlesWithX402 ? "Coinbase x402 (USDC), mock if unavailable" : "mock settlement (demo)"}
               </p>
             </div>
           </Panel>

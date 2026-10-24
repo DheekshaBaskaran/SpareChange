@@ -13,7 +13,7 @@ interface SystemSummary {
   executor: string;
   executorReal: boolean;
   payment: string;
-  paymentReal: boolean;
+  paymentState: "planned" | "live" | "simulated";
 }
 
 const NAV = [
@@ -27,21 +27,27 @@ export function SiteHeader() {
   const pathname = usePathname();
   const [system, setSystem] = useState<SystemSummary | null>(null);
 
+  // Refresh on every navigation and every few seconds, so the payment label
+  // updates as soon as a job settles.
   useEffect(() => {
-    fetch("/api/system")
-      .then((response) => response.json())
-      .then((data) => {
-        const firstAvailable = data.executors.find((executor: { available: boolean }) => executor.available);
-        const x402Live = data.payments.paymentMode === "x402" && data.payments.x402.configured;
-        setSystem({
-          executor: firstAvailable?.label ?? "Simulated worker",
-          executorReal: firstAvailable?.mode !== "mock",
-          payment: x402Live ? "x402" : "Mock settlement",
-          paymentReal: x402Live,
-        });
-      })
-      .catch(() => undefined);
-  }, []);
+    const load = () =>
+      fetch("/api/system")
+        .then((response) => response.json())
+        .then((data) => {
+          const firstAvailable = data.executors.find((executor: { available: boolean }) => executor.available);
+          setSystem({
+            executor: firstAvailable?.label ?? "Simulated worker",
+            executorReal: firstAvailable?.mode !== "mock",
+            // Based on what payment actually did, never on configuration alone.
+            payment: data.payments.lastOutcome.label,
+            paymentState: data.payments.lastOutcome.state,
+          });
+        })
+        .catch(() => undefined);
+    load();
+    const timer = setInterval(load, 5000);
+    return () => clearInterval(timer);
+  }, [pathname]);
 
   return <HeaderLayout pathname={pathname} system={system} />;
 }
@@ -88,7 +94,10 @@ function HeaderLayout({ pathname, system }: { pathname: string; system: SystemSu
               </span>
               <span className="h-3 w-px bg-line-strong" aria-hidden />
               <span className="flex items-center gap-1.5">
-                <span className={cx("size-1.5 rounded-full", system.paymentReal ? "bg-value" : "bg-muted")} aria-hidden />
+                <span
+                  className={cx("size-1.5 rounded-full", system.paymentState === "live" ? "bg-value" : system.paymentState === "planned" ? "border border-muted" : "bg-muted")}
+                  aria-hidden
+                />
                 {system.payment}
               </span>
             </>

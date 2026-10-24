@@ -8,6 +8,7 @@
 
 import type { ExecuteOptions, Job, PaymentResult } from "../../types";
 import { getConfig } from "../config";
+import { listJobs } from "../job-store";
 import { mockPaymentProvider } from "./mock";
 import { x402PaymentProvider } from "./x402";
 
@@ -40,6 +41,23 @@ export async function settlePayment(job: Job, options: ExecuteOptions = {}): Pro
   return { result: await mockPaymentProvider.settle(job) };
 }
 
+/**
+ * What payment ACTUALLY did most recently, for the header pill.
+ * We only ever say "live" after a real x402 transaction succeeded.
+ *   planned   – x402 is configured but no payment has happened yet
+ *   live      – the most recent settlement really went through x402
+ *   simulated – the most recent settlement was mock (or mock mode is on)
+ */
+export function lastPaymentOutcome(): { state: "planned" | "live" | "simulated"; label: string; transactionId?: string } {
+  const latestPaid = listJobs().find((job) => job.payment?.status === "SUCCESS");
+  if (latestPaid?.payment?.paymentMode === "x402") {
+    return { state: "live", label: "x402 · live", transactionId: latestPaid.payment.transactionId };
+  }
+  if (latestPaid) return { state: "simulated", label: "Mock settlement · simulated" };
+  if (getConfig().paymentMode === "x402") return { state: "planned", label: "Payment: planned" };
+  return { state: "simulated", label: "Mock settlement · simulated" };
+}
+
 /** Payment status for the System panel in the UI. */
 export function describePayments() {
   const { paymentMode, x402 } = getConfig();
@@ -47,5 +65,6 @@ export function describePayments() {
   return {
     paymentMode,
     x402: { ...x402Status, network: x402.network, settlementPrice: x402.settlementPrice },
+    lastOutcome: lastPaymentOutcome(),
   };
 }
