@@ -1,0 +1,75 @@
+# CREAO integration status
+
+**Verified:** 2026-10-24
+**Branch:** `Makayla`
+**Verdict:** **RELAY-SIDE 14-OPERATION CONTRACT VERIFIED LOCALLY / LIVE HOSTED AGENT NOT VERIFIED**
+
+The Relay backend preserves the 14 operations used by the existing hosted CREAO Deal Coordinator. The agent specification is [CREAO_AGENT_HANDOFF.md](CREAO_AGENT_HANDOFF.md); the agent itself is **not rebuilt** here. There is still no evidence in this workspace that the hosted agent has called a deployed Relay instance, and no public host, CREAO secret, runtime package, or probe output has been provided.
+
+The distinction matters:
+
+- **Implemented and locally tested:** the preserved operations, additive finance/investigation surfaces, response aliases, and the end-to-end workflow.
+- **Not verified:** the hosted agent's live configuration, network reachability, probe result, and run logs.
+
+## Preserved contract
+
+The 14 operations and compatibility checks are defined in [test/creao-contract.test.ts](../test/creao-contract.test.ts):
+
+- health, workload, party, offers, and market history reads;
+- deal search, deal read, counteroffer, and negotiation-event writes;
+- approval-request creation, approval list, and human approval write;
+- provisional handoff and escalation.
+
+Contract additions do not change those paths or methods. `POST /v1/deals/search` now returns a persisted `proposal` field (plus additive `recommended`/`proposals`/`rejected` aliases). Counteroffers that would remove the economic surplus or exceed the buyer budget return `409 counteroffer_infeasible` with `violations`.
+
+## What is implemented on the Relay side
+
+| Surface | Status | Evidence |
+|---|---|---|
+| Deterministic solver-backed search and counteroffers | `[x]` | `test/solver.test.ts`, `test/solver-general.test.ts` |
+| Participant-issued negotiation mandates | `[x]` | Mandate create/list routes; governed agent counteroffer test |
+| Persisted CREAO work queue and triggers | `[x]` | `deal_opportunity`, `financial_exception`, `approval_followup`; claim/complete tests |
+| Approval follow-up trigger | `[x]` | `POST /v1/creao/deals/{deal_id}/approval-followups` |
+| Investigation evidence packet | `[x]` | Contract, invoice, usage, payment, approval, payable, payout, and ledger records |
+| Findings, correction proposal, human approval, resolution | `[x]` | `test/finance.test.ts` |
+| Agent cannot approve or pay | `[x]` | 403 tests in `test/approvals.test.ts` and `test/recovery.test.ts` |
+| Audit query | `[x]` | `GET /v1/audit` used in workflow tests |
+| 14 preserved operations | `[x]` | `test/creao-contract.test.ts` |
+
+## What is still external
+
+- A public HTTPS Relay host reachable by CREAO.
+- Partner Tiger Data `DATABASE_URL` with migrations and seed applied.
+- `RELAY_API_BASE_URL` and `RELAY_API_KEY` configured in CREAO.
+- Runtime ZIP, `SKILL.md`, `mock_server.py`, and `contract_probe.py`.
+- The existing agent's 14/14 read probe and full workflow probe against the deployed API.
+- An agent run showing `backend.is_mock=false`.
+- A request log or `audit_events` row matching the agent's run time, endpoint, and principal.
+- The agent skill update that calls the new finance and investigation endpoints.
+
+## Required proof to mark the live integration verified
+
+1. A public HTTPS host serving `/v1/health` with `database: "ok"`.
+2. Partner Tiger Data migrated through `0005_provider_payouts.sql`, seeded, and reachable from that host.
+3. `RELAY_API_BASE_URL` set in CREAO to the host root, with no `/v1` and no trailing slash.
+4. `RELAY_API_KEY` stored as a CREAO secret, not in a document or chat.
+5. The existing agent's `contract_probe.py` output showing 14/14 on the preserved endpoints.
+6. An agent run showing `backend.is_mock=false`.
+7. A backend request log or `audit_events` row matching the probe/run time, endpoint, and agent principal.
+8. A negative test: the agent's `POST /v1/approvals` returns `403 human_attestation_required`.
+9. A real human approval recorded through a human credential.
+10. A response showing the handoff remains `settlement_authorized: false`; execution authorization is a separate explicit step.
+
+Do not mark the integration verified from a mock run, a reference-server run, a localhost curl, or a screenshot of the CREAO UI alone.
+
+## What to do next
+
+1. Have the partner provide the Tiger Data URL and apply `npm run db:migrate` / `db:migrate:timescale` (or confirm who runs it).
+2. Deploy the backend to the shared public HTTPS host.
+3. Set the CREAO secrets and run the preserved read-only probe.
+4. Run the full agent workflow against the deployed API and record the probe output.
+5. Record the evidence in [OWNER_CHECKLIST.md](OWNER_CHECKLIST.md).
+
+## Accurate wording for the demo
+
+> "The Relay coordination and finance APIs are implemented and locally tested end to end, including the preserved 14-operation CREAO contract, the hosted-agent work queue, and finance investigation surfaces. The live hosted CREAO connection is still pending a public host, Tiger Data credentials, and a probe result; it is not being rebuilt."

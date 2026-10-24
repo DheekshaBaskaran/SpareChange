@@ -1,0 +1,33 @@
+{
+  "name": "relay-duo1",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Relay Duo 1 clearing, CREAO, finance, controls, and Duo 2 boundary backend",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:migrate:timescale": "tsx src/db/migrate.ts --timescale",
+    "db:seed": "tsx src/db/seed.ts",
+    "key:create": "tsx scripts/create-api-key.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0",
+    "pg": "^8.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

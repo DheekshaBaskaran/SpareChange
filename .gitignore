@@ -1,0 +1,42 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Environment and local secrets
+.env
+.env.local
+.env.*.local
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Local databases, dumps, and runtime state
+.data/
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.gz
+*.pid
+tmp/
+.cache/
+.freebuff/
+
+# Logs and test output
+*.log
+logs/
+test-results/
+playwright-report/
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,5109 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Relay Duo 1 Coordination API",
+    "version": "1.0.0-p5",
+    "description": "Relay Duo 1 contract for deterministic clearing, CREAO coordination, Hyphenate finance, financial controls, and the Duo 2 execution/settlement boundary. Money is integer minor units and timestamps are ISO 8601 UTC. Solver and finance results are persisted; no LLM computes feasibility, allocations, compensation, or ledger entries.",
+    "contact": {
+      "name": "Relay Duo 1"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4000",
+      "description": "Local development"
+    },
+    {
+      "url": "https://api.example.invalid",
+      "description": "Replace with the public HTTPS relay host"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Market"
+    },
+    {
+      "name": "Deals"
+    },
+    {
+      "name": "Approvals"
+    },
+    {
+      "name": "Coordination"
+    },
+    {
+      "name": "Execution"
+    },
+    {
+      "name": "Finance"
+    },
+    {
+      "name": "CREAO"
+    },
+    {
+      "name": "Duo 2"
+    },
+    {
+      "name": "Audit"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "RELAY_API_KEY or a scoped API key. Agent keys cannot record participant approvals."
+      }
+    },
+    "parameters": {
+      "ContractHeader": {
+        "name": "X-Relay-Contract",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "const": "relay-duo1.v1"
+        },
+        "description": "Required on every request except /v1/health. Unknown versions are rejected with 400 unsupported_contract."
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "description": "Required on every write. Identical requests replay the original response for 24 hours. Reuse with a different body, method, or path returns 409 idempotency_conflict."
+      },
+      "WorkloadId": {
+        "name": "workload_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "PartyId": {
+        "name": "party_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "DealId": {
+        "name": "deal_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "AuthorizationId": {
+        "name": "authorization_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ContractId": {
+        "name": "contract_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "InvoiceId": {
+        "name": "invoice_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "InstructionId": {
+        "name": "instruction_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ApprovalId": {
+        "name": "approval_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ExceptionId": {
+        "name": "exception_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "RunId": {
+        "name": "run_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ItemId": {
+        "name": "item_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "PayableId": {
+        "name": "payable_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Provider payable identifier."
+      },
+      "PayoutInstructionId": {
+        "name": "payout_instruction_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Provider payout instruction identifier."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "detail",
+          "retryable",
+          "violations"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "examples": [
+              "terms_version_stale"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "violations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Money": {
+        "type": "integer",
+        "format": "int64",
+        "description": "Integer minor units. Never a floating-point amount."
+      },
+      "Party": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "status",
+          "permissions"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "buyer",
+              "provider",
+              "coordinator",
+              "platform"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "provider_profile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "hardware": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "allowed_workloads": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "regions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "price_model": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "authorized_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  },
+                  "authorization_expires_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  }
+                }
+              }
+            ]
+          },
+          "permissions": {
+            "type": "object",
+            "required": [
+              "currently_authorized"
+            ],
+            "properties": {
+              "currently_authorized": {
+                "type": "boolean"
+              },
+              "authorized_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "authorization_expires_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "Workload": {
+        "type": "object",
+        "required": [
+          "id",
+          "buyer_id",
+          "type",
+          "gpu_model",
+          "gpu_count",
+          "budget_minor",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "buyer_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "buyer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              }
+            }
+          },
+          "type": {
+            "type": "string"
+          },
+          "gpu_model": {
+            "type": "string"
+          },
+          "gpu_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "cpu_cores": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "memory_gb": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "budget_minor": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "earliest_start": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "flexibility": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "state": {
+            "type": "string"
+          },
+          "resource_constraints": {
+            "type": "object",
+            "properties": {
+              "gpu_model": {
+                "type": "string"
+              },
+              "gpu_count": {
+                "type": "integer"
+              },
+              "cpu_cores": {
+                "type": "integer"
+              },
+              "memory_gb": {
+                "type": "integer"
+              }
+            }
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "Offer": {
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "source",
+          "gpu_model",
+          "gpu_count",
+          "rate_minor_per_gpu_hour",
+          "executable"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "worker",
+              "external_reference"
+            ]
+          },
+          "external_ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gpu_model": {
+            "type": "string"
+          },
+          "gpu_count": {
+            "type": "integer"
+          },
+          "cpu_cores": {
+            "type": "integer"
+          },
+          "memory_gb": {
+            "type": "integer"
+          },
+          "rate_minor_per_gpu_hour": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "available_from": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "available_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "observed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "executable": {
+            "type": "boolean",
+            "description": "True only for a worker offer with a live provider authorization and a future expiry. Public listings are context, never executable inventory."
+          },
+          "advertised_executable": {
+            "type": "boolean"
+          },
+          "authorization": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "authorized",
+                  "missing",
+                  "revoked",
+                  "expired"
+                ]
+              },
+              "expires_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "PricePoint": {
+        "type": "object",
+        "required": [
+          "gpu_model",
+          "min_minor",
+          "avg_minor",
+          "max_minor",
+          "sample_count"
+        ],
+        "properties": {
+          "bucket": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "gpu_model": {
+            "type": "string"
+          },
+          "min_minor": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "avg_minor": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "max_minor": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "sample_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "Proposal": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Deterministic engine output. P0 seeds a fixture labelled engine.name=seed-fixture and engine.solver_status=fixture_not_solver. P1 must replace it with a persisted solver proposal."
+      },
+      "ApprovalSummary": {
+        "type": "object",
+        "required": [
+          "required",
+          "recorded",
+          "approved",
+          "pending",
+          "rejected",
+          "expired",
+          "simulated",
+          "stale",
+          "outstanding",
+          "complete"
+        ],
+        "properties": {
+          "required": {
+            "type": "integer"
+          },
+          "recorded": {
+            "type": "integer"
+          },
+          "approved": {
+            "type": "integer"
+          },
+          "pending": {
+            "type": "integer"
+          },
+          "rejected": {
+            "type": "integer"
+          },
+          "expired": {
+            "type": "integer"
+          },
+          "simulated": {
+            "type": "integer"
+          },
+          "stale": {
+            "type": "integer"
+          },
+          "outstanding": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "complete": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Approval": {
+        "type": "object",
+        "required": [
+          "id",
+          "request_id",
+          "deal_id",
+          "version",
+          "participant_id",
+          "decision",
+          "attested_by",
+          "simulated"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deal_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "participant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "rejected"
+            ]
+          },
+          "attested_by": {
+            "type": "string"
+          },
+          "attestation_channel": {
+            "type": "string"
+          },
+          "simulated": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ApprovalRequest": {
+        "type": "object",
+        "required": [
+          "id",
+          "deal_id",
+          "version",
+          "participant",
+          "obligation",
+          "amount_minor",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deal_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "participant": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "obligation": {
+            "type": "string"
+          },
+          "amount_minor": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "expired",
+              "superseded"
+            ]
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "approval": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Approval"
+              }
+            ]
+          }
+        }
+      },
+      "NegotiationEvent": {
+        "type": "object",
+        "required": [
+          "id",
+          "deal_id",
+          "version",
+          "round",
+          "event_type",
+          "actor_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deal_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "round": {
+            "type": "integer"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "Escalation": {
+        "type": "object",
+        "required": [
+          "id",
+          "deal_id",
+          "version",
+          "reason",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deal_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved",
+              "dismissed"
+            ]
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "Handoff": {
+        "type": "object",
+        "required": [
+          "id",
+          "deal_id",
+          "version",
+          "status",
+          "reservation_status",
+          "settlement_authorized",
+          "package"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deal_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "provisional"
+            ]
+          },
+          "reservation_status": {
+            "type": "string",
+            "enum": [
+              "not_reserved"
+            ]
+          },
+          "settlement_authorized": {
+            "type": "boolean",
+            "const": false
+          },
+          "package": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Missing or unsupported contract header, missing idempotency key, or invalid request.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing, invalid, expired, or revoked bearer credential.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "The credential is valid but lacks the required human/participant authority.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Workload, party, deal, or approval request not found.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Stale terms version, expired request, duplicate decision, reservation conflict, or idempotency conflict.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unprocessable": {
+        "description": "Schema or semantic validation failure.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotImplemented": {
+        "description": "P0 solver/counteroffer skeleton. The request was not applied.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unavailable": {
+        "description": "The database is unreachable.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "operationId": "getHealth",
+        "summary": "Liveness and database readiness",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service and database are ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "contract",
+                    "database",
+                    "time"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "ok"
+                    },
+                    "contract": {
+                      "type": "string",
+                      "const": "relay-duo1.v1"
+                    },
+                    "database": {
+                      "type": "string",
+                      "const": "ok"
+                    },
+                    "time": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/v1/workloads/{workload_id}": {
+      "get": {
+        "tags": [
+          "Market"
+        ],
+        "operationId": "getWorkload",
+        "summary": "Read a buyer workload",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/WorkloadId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted workload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "workload"
+                  ],
+                  "properties": {
+                    "workload": {
+                      "$ref": "#/components/schemas/Workload"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/parties/{party_id}": {
+      "get": {
+        "tags": [
+          "Market"
+        ],
+        "operationId": "getParty",
+        "summary": "Read a participant and provider permissions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/PartyId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted party.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "party"
+                  ],
+                  "properties": {
+                    "party": {
+                      "$ref": "#/components/schemas/Party"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/offers": {
+      "get": {
+        "tags": [
+          "Market"
+        ],
+        "operationId": "listOffers",
+        "summary": "List executable inventory and public references",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "name": "gpu_model",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "worker",
+                "external_reference"
+              ]
+            }
+          },
+          {
+            "name": "executable",
+            "in": "query",
+            "description": "true returns only live, authorized worker inventory.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "workload_id",
+            "in": "query",
+            "description": "Filter to offers compatible with the workload's GPU model and count.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Offers and the applied filters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "offers",
+                    "executable_offers",
+                    "public_references",
+                    "count",
+                    "filters"
+                  ],
+                  "properties": {
+                    "offers": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Offer"
+                      }
+                    },
+                    "executable_offers": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Offer"
+                      }
+                    },
+                    "public_references": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Offer"
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "filters": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/market/history": {
+      "get": {
+        "tags": [
+          "Market"
+        ],
+        "operationId": "getMarketHistory",
+        "summary": "Hourly price history from Tiger Data market observations",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "name": "gpu_model",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "window_hours",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 720,
+              "default": 24
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hourly price points.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "history",
+                    "window_hours",
+                    "gpu_model",
+                    "source"
+                  ],
+                  "properties": {
+                    "history": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PricePoint"
+                      }
+                    },
+                    "window_hours": {
+                      "type": "integer"
+                    },
+                    "gpu_model": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "source": {
+                      "type": "string",
+                      "const": "market_observations"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/deals/search": {
+      "post": {
+        "tags": [
+          "Deals"
+        ],
+        "operationId": "searchDeals",
+        "summary": "Ask the deterministic engine to search for a clearing proposal",
+        "description": "Runs the deterministic clearing engine over persisted executable offers, provider authorizations, active allocations, workload constraints, and the optional mandate. Supports direct rental, one-for-one exchange, bounded conditional chains, and closed cycles. A feasible proposal is persisted with versioned deal terms and participant approval requests. The response includes proposal (persisted), recommended, proposals, rejected, and infeasible_options. If no option clears the mandate, the response is 200 with status no_feasible_deal and no deal.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workload_id"
+                ],
+                "properties": {
+                  "workload_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "mandate": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": {
+                      "min_savings_minor": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "max_total_cost_minor": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "minimum": 0
+                      },
+                      "max_switching_cost_minor": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "minimum": 0
+                      },
+                      "coordination_fee_minor": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "max_chain_depth": {
+                        "type": "integer",
+                        "minimum": 2,
+                        "maximum": 6,
+                        "default": 4
+                      },
+                      "party_budgets_minor": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A feasible proposal was persisted (status feasible) or no option cleared the mandate (status no_feasible_deal).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A feasible proposal and deal were persisted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/deals/{deal_id}": {
+      "get": {
+        "tags": [
+          "Deals"
+        ],
+        "operationId": "getDeal",
+        "summary": "Read the current deal version, proposal, approvals, and events",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/DealId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current deal state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deal_id",
+                    "deal",
+                    "terms_version",
+                    "proposal",
+                    "approval_requests",
+                    "approval_summary",
+                    "approval_integrity",
+                    "settlement_authorized"
+                  ],
+                  "properties": {
+                    "deal_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "deal": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "workload_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "title": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "current_version": {
+                          "type": "integer"
+                        },
+                        "created_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        },
+                        "updated_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "terms_version": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "proposal": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "$ref": "#/components/schemas/Proposal"
+                        }
+                      ]
+                    },
+                    "engine": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "approval_requests": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ApprovalRequest"
+                      }
+                    },
+                    "approvals": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Approval"
+                      }
+                    },
+                    "approval_summary": {
+                      "$ref": "#/components/schemas/ApprovalSummary"
+                    },
+                    "approval_integrity": {
+                      "type": "object",
+                      "required": [
+                        "approved_for_current",
+                        "stale_requests",
+                        "stale_approvals",
+                        "expired_requests",
+                        "problems",
+                        "handoff_permitted",
+                        "settlement_authorized"
+                      ],
+                      "properties": {
+                        "approved_for_current": {
+                          "type": "boolean"
+                        },
+                        "stale_requests": {
+                          "type": "integer"
+                        },
+                        "stale_approvals": {
+                          "type": "integer"
+                        },
+                        "expired_requests": {
+                          "type": "integer"
+                        },
+                        "problems": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "handoff_permitted": {
+                          "type": "boolean"
+                        },
+                        "settlement_authorized": {
+                          "type": "boolean",
+                          "const": false
+                        }
+                      }
+                    },
+                    "settlement_authorized": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "negotiation_events": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NegotiationEvent"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/deals/{deal_id}/counteroffers": {
+      "post": {
+        "tags": [
+          "Deals"
+        ],
+        "operationId": "createCounteroffer",
+        "summary": "Ask the engine to re-solve against a buyer price ceiling",
+        "description": "Reprices a provider commitment. A human provider may counter for its own party; an agent must present an active participant-issued mandate. A new deal version is persisted, prior pending approvals are superseded, and new approvals are created. Stale versions and mandate breaches are rejected before any version change.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DealId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "terms_version",
+                  "ask_price_minor_per_gpu_hour"
+                ],
+                "properties": {
+                  "terms_version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "ask_price_minor_per_gpu_hour": {
+                    "$ref": "#/components/schemas/Money"
+                  },
+                  "rationale": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "New deal version with reset approvals and negotiation event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/deals/{deal_id}/negotiation-events": {
+      "post": {
+        "tags": [
+          "Coordination"
+        ],
+        "operationId": "createNegotiationEvent",
+        "summary": "Record a terms-conveyed, counteroffer, or escalation event",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DealId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "event_type"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "round": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "payload": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Persisted negotiation event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "event"
+                  ],
+                  "properties": {
+                    "event": {
+                      "$ref": "#/components/schemas/NegotiationEvent"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/approval-requests": {
+      "post": {
+        "tags": [
+          "Approvals"
+        ],
+        "operationId": "createApprovalRequest",
+        "summary": "Create one pending human approval request for an obligated participant",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "deal_id",
+                  "participant_id",
+                  "obligation"
+                ],
+                "properties": {
+                  "deal_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "participant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "obligation": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "amount_minor": {
+                    "$ref": "#/components/schemas/Money"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "channel": {
+                    "type": "string",
+                    "maxLength": 40
+                  },
+                  "expires_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pending approval request. It does not record a decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "approval_request"
+                  ],
+                  "properties": {
+                    "approval_request": {
+                      "$ref": "#/components/schemas/ApprovalRequest"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/approvals": {
+      "get": {
+        "tags": [
+          "Approvals"
+        ],
+        "operationId": "listApprovals",
+        "summary": "List approval requests and recorded human decisions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "name": "deal_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "participant_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approval requests, decisions, and summary.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deal_id",
+                    "terms_version",
+                    "approval_requests",
+                    "approvals",
+                    "summary"
+                  ],
+                  "properties": {
+                    "deal_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "terms_version": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "approval_requests": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ApprovalRequest"
+                      }
+                    },
+                    "approvals": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Approval"
+                      }
+                    },
+                    "summary": {
+                      "$ref": "#/components/schemas/ApprovalSummary"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Approvals"
+        ],
+        "operationId": "createApproval",
+        "summary": "Record a human-attested participant decision",
+        "description": "Agent and service credentials are rejected with 403 human_attestation_required. attested_by must match the human bound to the credential. A decision for an outdated terms version is rejected with 409 terms_version_stale.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "request_id",
+                  "decision",
+                  "attested_by"
+                ],
+                "properties": {
+                  "request_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "approved",
+                      "rejected"
+                    ]
+                  },
+                  "attested_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "channel": {
+                    "type": "string",
+                    "maxLength": 40
+                  },
+                  "note": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 2000
+                  },
+                  "simulated": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Recorded decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "approval",
+                    "request",
+                    "deal_status"
+                  ],
+                  "properties": {
+                    "approval": {
+                      "$ref": "#/components/schemas/Approval"
+                    },
+                    "request": {
+                      "$ref": "#/components/schemas/ApprovalRequest"
+                    },
+                    "deal_status": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/deals/{deal_id}/handoff": {
+      "post": {
+        "tags": [
+          "Coordination"
+        ],
+        "operationId": "createHandoff",
+        "summary": "Prepare a provisional handoff package after all approvals",
+        "description": "Re-validates the current terms version, complete approvals, executable worker inventory, live provider authorization, and each buyer's budget. P0 never reserves capacity and always returns settlement_authorized=false.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DealId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provisional handoff package.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "handoff",
+                    "replayed",
+                    "reservation_status",
+                    "settlement_authorized"
+                  ],
+                  "properties": {
+                    "handoff": {
+                      "$ref": "#/components/schemas/Handoff"
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    },
+                    "reservation_status": {
+                      "type": "string",
+                      "const": "not_reserved"
+                    },
+                    "settlement_authorized": {
+                      "type": "boolean",
+                      "const": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/deals/{deal_id}/escalations": {
+      "post": {
+        "tags": [
+          "Coordination"
+        ],
+        "operationId": "createEscalation",
+        "summary": "Record an unresolved exception and mark the deal escalated",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DealId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reason"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "details": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Persisted escalation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "escalation"
+                  ],
+                  "properties": {
+                    "escalation": {
+                      "$ref": "#/components/schemas/Escalation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/negotiation-mandates": {
+      "get": {
+        "tags": [
+          "Deals"
+        ],
+        "operationId": "listNegotiationMandates",
+        "summary": "List participant-issued agent negotiation mandates",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mandates.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Deals"
+        ],
+        "operationId": "createNegotiationMandate",
+        "summary": "Issue an enforceable negotiation mandate to a hosted agent",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Mandate created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/deals/{deal_id}/execution-authorizations": {
+      "post": {
+        "tags": [
+          "Execution"
+        ],
+        "operationId": "authorizeExecution",
+        "summary": "Authorize Duo 2 execution after a valid provisional handoff",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DealId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Execution authorization and finance contracts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Execution"
+        ],
+        "operationId": "listDealExecutionAuthorizations",
+        "summary": "Read the current execution authorization for a deal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/DealId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/execution-authorizations/{authorization_id}": {
+      "get": {
+        "tags": [
+          "Execution"
+        ],
+        "operationId": "getExecutionAuthorization",
+        "summary": "Read one execution authorization and its contracts",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/AuthorizationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/contracts": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "listDealContracts",
+        "summary": "List finance contracts created from an authorized deal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contracts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/contracts/{contract_id}/invoices": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "generateInvoice",
+        "summary": "Generate an invoice from unbilled verified usage and approved fees",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/ContractId"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Invoice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/invoices": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "createManualInvoice",
+        "summary": "Create a manual or external invoice for duplicate/exception testing",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invoice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "listInvoices",
+        "summary": "List invoices",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoices.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/invoices/{invoice_id}": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "getInvoice",
+        "summary": "Read an invoice and its lines",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/InvoiceId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/invoices/{invoice_id}/lines": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "addInvoiceLine",
+        "summary": "Add an explicit manual charge and matching ledger posting",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/InvoiceId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Updated invoice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/provider-payables": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "listProviderPayables",
+        "summary": "Read provider payable balances",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/invoices/{invoice_id}/payment-instruction": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "requestPaymentInstruction",
+        "summary": "Request a payment instruction subject to blocks, limits, and human approval",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/InvoiceId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Instruction created."
+          },
+          "202": {
+            "description": "Human approval required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/payment-instructions": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "listPaymentInstructions",
+        "summary": "List payment instructions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Instructions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/payment-instructions/{instruction_id}/submit": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "submitPaymentInstruction",
+        "summary": "Mark an instruction submitted to the settlement rail",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/InstructionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Instruction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/payment-instructions/{instruction_id}/retry": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "retryPaymentInstruction",
+        "summary": "Create a replacement instruction for a failed payment after blockers clear",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/InstructionId"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Replacement instruction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/financial-approvals": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "listFinancialApprovals",
+        "summary": "List finance and payment approvals",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approvals.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/financial-approvals/{approval_id}/decision": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "decideFinancialApproval",
+        "summary": "Human decision on a correction or payment approval",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/ApprovalId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decision and dispatched result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/finance/reconciliations": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "runReconciliation",
+        "summary": "Reconcile contracts, invoices, usage, payments, and the ledger",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reconciliation run.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/finance/reconciliations/{run_id}": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "getReconciliationRun",
+        "summary": "Read reconciliation matches and summary",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/RunId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/finance/exceptions": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "listFinancialExceptions",
+        "summary": "List financial exceptions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exceptions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/finance/exceptions/{exception_id}": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "getFinancialException",
+        "summary": "Read one financial exception",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ExceptionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exception.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/finance/exceptions/{exception_id}/evidence": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "getExceptionEvidence",
+        "summary": "Read persisted contract, usage, invoice, payment, approval, and ledger evidence",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ExceptionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/finance/exceptions/{exception_id}/investigate": {
+      "post": {
+        "tags": [
+          "CREAO"
+        ],
+        "operationId": "investigateException",
+        "summary": "Record a CREAO investigation finding",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/ExceptionId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Exception.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/finance/exceptions/{exception_id}/propose-correction": {
+      "post": {
+        "tags": [
+          "CREAO"
+        ],
+        "operationId": "proposeExceptionCorrection",
+        "summary": "Propose an invoice correction for human approval",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/ExceptionId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Correction proposal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/finance/exceptions/{exception_id}/dismiss": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "dismissFinancialException",
+        "summary": "Dismiss an investigated exception with a reason",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/ExceptionId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exception.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/ledger/trial-balance": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "getTrialBalance",
+        "summary": "Read the trial balance",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trial balance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/ledger/entries": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "operationId": "listLedgerEntries",
+        "summary": "Read journal entries with balanced line detail",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journal entries.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/creao/work-items": {
+      "get": {
+        "tags": [
+          "CREAO"
+        ],
+        "operationId": "listCreaoWorkItems",
+        "summary": "List persisted CREAO work items and triggers",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Work items.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/creao/work-items/{item_id}": {
+      "get": {
+        "tags": [
+          "CREAO"
+        ],
+        "operationId": "getCreaoWorkItem",
+        "summary": "Read one work item",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ItemId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Work item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/creao/work-items/{item_id}/claim": {
+      "post": {
+        "tags": [
+          "CREAO"
+        ],
+        "operationId": "claimCreaoWorkItem",
+        "summary": "Atomically claim a work item for the hosted agent",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/ItemId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Work item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/creao/work-items/{item_id}/complete": {
+      "post": {
+        "tags": [
+          "CREAO"
+        ],
+        "operationId": "completeCreaoWorkItem",
+        "summary": "Complete or fail a work item with an outcome payload",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/ItemId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Work item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/creao/deals/{deal_id}/approval-followups": {
+      "post": {
+        "tags": [
+          "CREAO"
+        ],
+        "operationId": "createApprovalFollowup",
+        "summary": "Trigger an approval-followup workflow for a deal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/DealId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Work item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/creao/investigations/{exception_id}": {
+      "get": {
+        "tags": [
+          "CREAO"
+        ],
+        "operationId": "getCreaoInvestigation",
+        "summary": "Read the investigation evidence packet",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ExceptionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/creao/investigations/{exception_id}/findings": {
+      "post": {
+        "tags": [
+          "CREAO"
+        ],
+        "operationId": "recordCreaoFindings",
+        "summary": "Persist investigation findings and sources",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/ExceptionId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Exception.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/creao/queue-summary": {
+      "get": {
+        "tags": [
+          "CREAO"
+        ],
+        "operationId": "getCreaoQueueSummary",
+        "summary": "Read queue and exception counts",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/internal/v1/duo2/usage": {
+      "post": {
+        "tags": [
+          "Duo 2"
+        ],
+        "operationId": "ingestVerifiedUsage",
+        "summary": "Receive verified execution usage from Duo 2",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Verified usage and billing calculation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/internal/v1/duo2/contracts/{contract_id}": {
+      "get": {
+        "tags": [
+          "Duo 2"
+        ],
+        "operationId": "getDuo2Contract",
+        "summary": "Read contract terms and verified usage for Duo 2",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ContractId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contract.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/internal/v1/duo2/contracts/{contract_id}/usage": {
+      "get": {
+        "tags": [
+          "Duo 2"
+        ],
+        "operationId": "getDuo2ContractUsage",
+        "summary": "List verified usage for a contract",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ContractId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usage.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/internal/v1/duo2/execution-authorizations/{authorization_id}": {
+      "get": {
+        "tags": [
+          "Duo 2"
+        ],
+        "operationId": "getDuo2ExecutionAuthorization",
+        "summary": "Read the authorization scope and contracts",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/AuthorizationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/internal/v1/duo2/payment-instructions": {
+      "get": {
+        "tags": [
+          "Duo 2"
+        ],
+        "operationId": "listDuo2PaymentInstructions",
+        "summary": "Read approved payment instructions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Instructions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/internal/v1/duo2/payment-instructions/{instruction_id}/submit": {
+      "post": {
+        "tags": [
+          "Duo 2"
+        ],
+        "operationId": "submitDuo2PaymentInstruction",
+        "summary": "Mark an instruction submitted by the settlement service",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/InstructionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Instruction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/internal/v1/duo2/settlements": {
+      "post": {
+        "tags": [
+          "Duo 2"
+        ],
+        "operationId": "ingestDuo2Settlement",
+        "summary": "Receive a confirmed or failed settlement confirmation",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment and invoice status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/audit": {
+      "get": {
+        "tags": [
+          "Audit"
+        ],
+        "operationId": "listAuditEvents",
+        "summary": "Read the persistent audit trail",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/provider-payables/{payable_id}": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/PayableId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "operationId": "getProviderPayable",
+        "summary": "Read a provider payable and its remaining balance"
+      }
+    },
+    "/v1/provider-payables/{payable_id}/payout-instruction": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/PayableId"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Payout instruction created."
+          },
+          "202": {
+            "description": "Human approval required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "operationId": "requestProviderPayout",
+        "summary": "Request a provider payout subject to limits and human approval",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/provider-payout-instructions": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider payout instructions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "operationId": "listProviderPayoutInstructions",
+        "summary": "List provider payout instructions"
+      }
+    },
+    "/v1/provider-payout-instructions/{payout_instruction_id}/retry": {
+      "post": {
+        "tags": [
+          "Finance"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/PayoutInstructionId"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Replacement payout instruction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "operationId": "retryProviderPayout",
+        "summary": "Retry a failed provider payout after its exception is cleared"
+      }
+    },
+    "/v1/provider-payouts": {
+      "get": {
+        "tags": [
+          "Finance"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider payouts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "operationId": "listProviderPayouts",
+        "summary": "List confirmed and failed provider payouts"
+      }
+    },
+    "/internal/v1/duo2/provider-payables": {
+      "get": {
+        "tags": [
+          "Duo 2"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider payables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "operationId": "listDuo2ProviderPayables",
+        "summary": "List provider payables for the settlement service"
+      }
+    },
+    "/internal/v1/duo2/provider-payout-instructions": {
+      "get": {
+        "tags": [
+          "Duo 2"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider payout instructions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "operationId": "listDuo2ProviderPayoutInstructions",
+        "summary": "List provider payout instructions for the settlement service"
+      }
+    },
+    "/internal/v1/duo2/provider-payout-instructions/{payout_instruction_id}/submit": {
+      "post": {
+        "tags": [
+          "Duo 2"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/PayoutInstructionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider payout instruction.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "operationId": "submitDuo2ProviderPayoutInstruction",
+        "summary": "Mark a provider payout instruction submitted by Duo 2"
+      }
+    },
+    "/internal/v1/duo2/provider-payouts": {
+      "get": {
+        "tags": [
+          "Duo 2"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider payouts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "operationId": "listDuo2ProviderPayouts",
+        "summary": "List provider payout confirmations for Duo 2"
+      }
+    },
+    "/internal/v1/duo2/provider-settlements": {
+      "post": {
+        "tags": [
+          "Duo 2"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider payout and payable status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        },
+        "operationId": "ingestDuo2ProviderSettlement",
+        "summary": "Receive a confirmed or failed provider payout confirmation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
