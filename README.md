@@ -140,8 +140,10 @@ Test failure handling at http://localhost:3402/system → *Failure scenarios*.
 ```bash
 npm run lint
 npm run typecheck
-npm run build
+npm run build      # stop `npm run dev` first: both use the .next/ folder
 ```
+
+If pages get stuck on a loading state in dev: stop the server, run `rm -rf .next`, and start `npm run dev` again.
 
 ## Notes
 

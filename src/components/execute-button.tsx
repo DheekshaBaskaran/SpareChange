@@ -14,11 +14,16 @@ export function ExecuteButton({
   deal,
   simulateFailure,
   size = "lg",
+  label = "EXECUTE DEAL",
+  variant = "primary",
   className,
 }: {
   deal: Deal;
   simulateFailure?: ExecuteOptions["simulateFailure"];
   size?: "md" | "lg";
+  label?: string;
+  /** "secondary" is a quieter style for test buttons (e.g. failure scenarios). */
+  variant?: "primary" | "secondary";
   className?: string;
 }) {
   const router = useRouter();
@@ -51,8 +56,11 @@ export function ExecuteButton({
         onClick={execute}
         disabled={submitting}
         className={cx(
-          "group flex w-full items-center justify-center gap-2 rounded-lg bg-value font-semibold tracking-tight text-canvas transition-all",
-          "hover:brightness-110 active:scale-[0.99] disabled:cursor-wait disabled:opacity-80",
+          "group flex w-full items-center justify-center gap-2 rounded-lg font-semibold tracking-tight transition-all",
+          "active:scale-[0.99] disabled:cursor-wait disabled:opacity-80",
+          variant === "primary"
+            ? "bg-value text-canvas hover:brightness-110"
+            : "border border-line-strong bg-surface-2 text-ink hover:border-muted",
           size === "lg" ? "h-12 text-[15px]" : "h-10 text-sm",
         )}
       >
@@ -62,7 +70,7 @@ export function ExecuteButton({
           </>
         ) : (
           <>
-            <Zap className="size-4" aria-hidden /> EXECUTE DEAL
+            <Zap className="size-4" aria-hidden /> {label}
             <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
           </>
         )}

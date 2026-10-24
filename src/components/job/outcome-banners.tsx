@@ -75,7 +75,7 @@ export function FailureBanner({ job }: { job: Job }) {
         <TriangleAlert className="size-5" aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
-        <h2 className="text-lg font-semibold tracking-tight text-ink">Execution failed at: {STATUS_META[step].stepTitle.toLowerCase()}</h2>
+        <h2 className="text-lg font-semibold tracking-tight text-ink">{STATUS_META[step].failTitle}</h2>
         <p className="mt-0.5 text-sm text-ink-2">{job.failure?.message}</p>
         <p className="mt-1 text-xs text-muted">No funds were released for this job.</p>
       </div>

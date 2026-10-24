@@ -36,7 +36,7 @@ export function LifecycleStepper({ job }: { job: Job }) {
             <StepIcon state={state} />
             <div className="min-w-0 pt-0.5">
               <div className={cx("text-sm font-medium", state === "upcoming" ? "text-faint" : state === "failed" ? "text-danger" : "text-ink")}>
-                {meta.stepTitle}
+                {state === "failed" ? meta.failTitle : meta.stepTitle}
                 <span className="sr-only"> ({state})</span>
               </div>
               <div className="mt-0.5 text-xs text-muted">

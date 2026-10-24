@@ -12,14 +12,14 @@ export const LIFECYCLE: Exclude<JobStatus, "FAILED">[] = [
   "COMPLETE",
 ];
 
-export const STATUS_META: Record<JobStatus, { label: string; stepTitle: string; stepDetail: string; tone: Tone }> = {
-  APPROVED: { label: "Approved", stepTitle: "Deal approved", stepDetail: "Terms agreed by all parties", tone: "neutral" },
-  PROVISIONING: { label: "Provisioning", stepTitle: "Compute provisioned", stepDetail: "Worker selected and prepared", tone: "compute" },
-  RUNNING: { label: "Running", stepTitle: "Workload running", stepDetail: "Job executing on released capacity", tone: "compute" },
-  VERIFYING: { label: "Verifying", stepTitle: "Execution verified", stepDetail: "Output checked before any payment", tone: "compute" },
-  PAYMENT_PENDING: { label: "Settling", stepTitle: "Payment settled", stepDetail: "Funds released to each participant", tone: "pending" },
-  COMPLETE: { label: "Complete", stepTitle: "Deal complete", stepDetail: "Everyone received their outcome", tone: "value" },
-  FAILED: { label: "Failed", stepTitle: "Failed", stepDetail: "", tone: "danger" },
+export const STATUS_META: Record<JobStatus, { label: string; stepTitle: string; stepDetail: string; failTitle: string; tone: Tone }> = {
+  APPROVED: { label: "Approved", stepTitle: "Deal approved", stepDetail: "Terms agreed by all parties", failTitle: "Deal rejected", tone: "neutral" },
+  PROVISIONING: { label: "Provisioning", stepTitle: "Compute provisioned", stepDetail: "Worker selected and prepared", failTitle: "Provisioning failed", tone: "compute" },
+  RUNNING: { label: "Running", stepTitle: "Workload running", stepDetail: "Job executing on released capacity", failTitle: "Workload failed", tone: "compute" },
+  VERIFYING: { label: "Verifying", stepTitle: "Execution verified", stepDetail: "Output checked before any payment", failTitle: "Verification failed", tone: "compute" },
+  PAYMENT_PENDING: { label: "Settling", stepTitle: "Payment settled", stepDetail: "Funds released to each participant", failTitle: "Payment failed", tone: "pending" },
+  COMPLETE: { label: "Complete", stepTitle: "Deal complete", stepDetail: "Everyone received their outcome", failTitle: "Failed", tone: "value" },
+  FAILED: { label: "Failed", stepTitle: "Failed", stepDetail: "", failTitle: "Failed", tone: "danger" },
 };
 
 export type Tone = "neutral" | "compute" | "pending" | "value" | "danger";

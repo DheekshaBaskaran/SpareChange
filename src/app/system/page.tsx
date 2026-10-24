@@ -32,7 +32,7 @@ export default function SystemPage() {
             <div key={scenario.id} className="flex flex-col bg-surface p-5">
               <div className="text-sm font-medium text-ink">{scenario.title}</div>
               <p className="mt-1 flex-1 text-[13px] leading-5 text-muted">{scenario.detail}</p>
-              <ExecuteButton deal={DEMO_MULTI_PARTY_DEAL} simulateFailure={scenario.id} size="md" className="mt-4" />
+              <ExecuteButton deal={DEMO_MULTI_PARTY_DEAL} simulateFailure={scenario.id} size="md" label="Run scenario" variant="secondary" className="mt-4" />
             </div>
           ))}
         </div>

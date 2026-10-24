@@ -73,6 +73,7 @@ Dark, high-contrast "infrastructure console" look. One accent for value/money (`
 
 - Cache Components is on: anything that reads request data, `params`, `Date.now()`, or uncached I/O must be inside `<Suspense>` or call `await connection()`. `npm run build` will tell you.
 - Read `node_modules/next/dist/docs/` before using unfamiliar Next.js APIs.
+- Stop `npm run dev` before `npm run build`: both write to `.next/`, and the dev server gets stuck on loading states afterwards. If that happens: stop dev, `rm -rf .next`, start again.
 
 ## Don't over-engineer
 
