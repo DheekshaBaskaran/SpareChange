@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────
+   SpareChange design tokens.
+   One brand accent (value / money = green), one compute color
+   (blue), and status colors. Everything else is neutral.
+   ───────────────────────────────────────────────────────────── */
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --color-canvas: #07080a;
+  --color-surface: #0e1013;
+  --color-surface-2: #14171c;
+  --color-surface-3: #1b1f26;
+  --color-line: #20252d;
+  --color-line-strong: #2d343f;
+
+  --color-ink: #f1f3f6;
+  --color-ink-2: #c5cbd5;
+  --color-muted: #8d96a5;
+  --color-faint: #5d6675;
+
+  --color-value: #3ddc97;
+  --color-value-dim: #1d6b4a;
+  --color-compute: #7c9cff;
+  --color-compute-dim: #34437a;
+  --color-pending: #f5b54a;
+  --color-danger: #f26d6d;
+}
+
+html {
+  color-scheme: dark;
+  background: var(--color-canvas);
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* Numbers line up in tables and metrics. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Faint engineering grid used behind the page header. */
+.grid-backdrop {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black 0%, transparent 85%);
+}
+
+/* Dashed flow line in the deal graph. The dashes move in the direction
+   compute or money is flowing. */
+.flow-line {
+  height: 2px;
+  background-image: repeating-linear-gradient(90deg, currentColor 0 6px, transparent 6px 10px);
+  background-size: 10px 2px;
+}
+.flow-line.solid {
+  background-image: none;
+  background-color: currentColor;
+}
+@keyframes flow-right {
+  to {
+    background-position: 10px 0;
+  }
+}
+@keyframes flow-left {
+  to {
+    background-position: -10px 0;
+  }
+}
+.flow-right {
+  animation: flow-right 0.45s linear infinite;
+}
+.flow-left {
+  animation: flow-left 0.45s linear infinite;
+}
+.flow-slow {
+  animation-duration: 2.4s;
+}
+
+/* Soft pulse for the current lifecycle step. */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(124 156 255 / 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgb(124 156 255 / 0);
+  }
+}
+.pulse-ring {
+  animation: pulse-ring 1.4s ease-out infinite;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise-in {
+  animation: rise-in 0.35s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-right,
+  .flow-left,
+  .pulse-ring,
+  .rise-in {
+    animation: none;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-compute);
+  outline-offset: 2px;
+}
