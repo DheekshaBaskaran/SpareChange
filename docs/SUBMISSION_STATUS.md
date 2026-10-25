@@ -47,14 +47,25 @@ The reconstructed probe produced the saved 14/14 result at
 That run executed an attached ZIP copy because the app-files manifest did not
 list `contract_probe_v2.py`.
 
-**Remote app check:** `GET
-https://agent.creao.ai/api/v1/apps/93f296bc-583e-4245-8eb2-cd2ad9974832/runs`
-returns `200`, but all seven recorded runs are `completed` with
-`result.text: ""`. The app-scoped trigger is reachable; the coordinator runtime
-is still not producing output. The app list endpoint returns `403` with the
-app-scoped key, so a new agent cannot be created or inspected from this
-workspace. The raw run listing is saved at
-[`creao-app-runs-2026-10-25.json`](evidence/creao-app-runs-2026-10-25.json).
+**Remote app check:** the old app ID
+`93f296bc-583e-4245-8eb2-cd2ad9974832` is stale: `POST /runs` returns
+`404 APP_NOT_FOUND`. The trigger key is scoped to **Relay Read Probe v1**
+(`2b187fe0-4ad4-4693-a4ed-c061da8214a0`). A remote run of that app completed and
+returned:
+
+```json
+{
+  "verdict": "config_error",
+  "error": "RELAY_API_KEY is not set"
+}
+```
+
+The app reported `RELAY_API_BASE_URL` as correct at `https://api.bitsthat.fit`
+and made **zero HTTP requests**. This is an environment/secret issue, not a
+Vultr or Relay failure. Add the Relay `relay_…` agent key as the CREAO secret
+`RELAY_API_KEY`, then re-run. See
+[`CREAO_REMOTE_DIAGNOSIS.md`](CREAO_REMOTE_DIAGNOSIS.md) and the
+[completed run](evidence/creao-read-probe-config-error-2026-10-25.json).
 
 Do **not** claim that the hosted Relay Deal Coordinator completed a workflow.
 The hosted evidence proves the contract probe reached Relay; it does not prove
