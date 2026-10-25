@@ -85,14 +85,18 @@ class TensorDockAdapter(ProviderAdapter):
                 reason = str(exc)[:160] or type(exc).__name__
                 reasons[reason] = reasons.get(reason, 0) + 1
 
+        emitted = len(items)
+        truncated = emitted > limit
         items = items[:limit]
         return FetchOutcome(
             items=items,
             fetched=len(hostnodes),
             rejected=rejected,
+            complete=not truncated,
             diagnostics={
                 "returned_hostnodes": len(hostnodes),
                 "emitted_offers": len(items),
+                "truncated": truncated,
                 "rejected_reasons": reasons,
                 "endpoint": f"{self.settings.tensordock_base_url.rstrip('/')}/hostnodes",
                 "authenticated": True,

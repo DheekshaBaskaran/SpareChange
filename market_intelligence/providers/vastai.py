@@ -70,10 +70,17 @@ class VastAiAdapter(ProviderAdapter):
                 reason = str(exc)[:160] or type(exc).__name__
                 reject_reasons[reason] = reject_reasons.get(reason, 0) + 1
 
+        # The public Vast search returns a capped sample, not the full
+        # inventory: repeated identical queries return different offer sets and
+        # no pagination is exposed. Never infer disappearances from it, even
+        # when the provider reports ``truncated=False``.
+        source_truncated = bool(payload.get("truncated", False))
         diagnostics: dict[str, Any] = {
             "requested_limit": requested,
             "returned": len(offers),
-            "truncated": len(offers) >= requested,
+            "sampled": True,
+            "source_truncated": source_truncated,
+            "truncated": True,
             "rejected_reasons": reject_reasons,
             "endpoint": f"{self.settings.vastai_base_url.rstrip('/')}/bundles/",
         }
@@ -84,6 +91,7 @@ class VastAiAdapter(ProviderAdapter):
             items=items,
             fetched=len(offers),
             rejected=rejected,
+            complete=False,
             diagnostics=diagnostics,
         )
 

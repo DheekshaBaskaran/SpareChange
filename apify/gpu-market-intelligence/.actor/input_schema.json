@@ -6,21 +6,30 @@
     "providers": {
       "title": "Providers",
       "type": "array",
-      "description": "Public providers to collect. Lambda and TensorDock require their API keys as Actor environment variables.",
+      "description": "Vast.ai and RunPod are operational. Akash is experimental: the public API exposes live GPU capacity but no fixed price, so Akash records have price_available=false and pricing_model=bid.",
       "editor": "stringList",
       "uniqueItems": true,
       "items": {
         "type": "string"
       },
-      "default": ["vastai", "runpod"]
+      "default": ["vastai", "runpod", "akash"]
     },
     "maxItemsPerProvider": {
       "title": "Maximum offers per provider",
       "type": "integer",
-      "description": "Upper bound on normalized offers emitted per provider.",
-      "default": 200,
+      "description": "Upper bound on normalized offers emitted per provider. A run that hits this cap is marked incomplete and cannot emit disappearance events for that provider.",
+      "default": 300,
       "minimum": 1,
       "maximum": 1000
+    },
+    "gpuModels": {
+      "title": "GPU models",
+      "type": "array",
+      "description": "Optional normalized model allowlist, for example H100, A100, RTX 4090. Empty means all models.",
+      "editor": "stringList",
+      "uniqueItems": true,
+      "items": { "type": "string" },
+      "default": []
     },
     "minGpuMemoryGb": {
       "title": "Minimum VRAM (GB)",
@@ -29,11 +38,82 @@
       "default": 0,
       "minimum": 0
     },
+    "maxPricePerGpuHourUsd": {
+      "title": "Maximum USD per GPU-hour",
+      "type": "number",
+      "description": "Optional budget ceiling. When set, unpriced capacity records are excluded because they cannot be compared to a budget.",
+      "minimum": 0
+    },
+    "regions": {
+      "title": "Regions",
+      "type": "array",
+      "description": "Optional case-insensitive substring allowlist matched against region or country, for example Oregon, us-east, Netherlands.",
+      "editor": "stringList",
+      "uniqueItems": true,
+      "items": { "type": "string" },
+      "default": []
+    },
+    "countries": {
+      "title": "Countries",
+      "type": "array",
+      "description": "Optional ISO-3166 alpha-2 country allowlist, for example US, DE, NL.",
+      "editor": "stringList",
+      "uniqueItems": true,
+      "items": { "type": "string" },
+      "default": []
+    },
     "includeRawPayload": {
       "title": "Include raw provider payload",
       "type": "boolean",
       "description": "Include the source record for provenance. Disable to reduce dataset size.",
       "default": true
+    },
+    "detectChanges": {
+      "title": "Detect changes across runs",
+      "type": "boolean",
+      "description": "Compare this run with persistent Actor state and emit new, updated, and disappeared events.",
+      "default": true
+    },
+    "emitBaselineEvents": {
+      "title": "Emit events on first run",
+      "type": "boolean",
+      "description": "When false, the first successful collection establishes a baseline without flooding the events dataset with every offer as new.",
+      "default": false
+    },
+    "priceChangeThresholdPercent": {
+      "title": "Price change threshold (%)",
+      "type": "number",
+      "description": "Minimum absolute price change required to emit an updated event. Capacity changes are always emitted. Set 0 to emit every price change.",
+      "default": 1,
+      "minimum": 0,
+      "maximum": 100
+    },
+    "stateRetentionDays": {
+      "title": "State retention (days)",
+      "type": "integer",
+      "description": "Remove offers unseen for this many days from persistent comparison state.",
+      "default": 14,
+      "minimum": 1,
+      "maximum": 90
+    },
+    "stateKey": {
+      "title": "State key",
+      "type": "string",
+      "description": "Key-value store key holding cross-run state. Use a different key only when running an intentionally separate collection.",
+      "editor": "textfield",
+      "default": "MARKET_STATE"
+    },
+    "pushToRelay": {
+      "title": "Push to Relay / Tiger Data",
+      "type": "boolean",
+      "description": "After collection, POST offers and events to the Relay admin API. Requires RELAY_INGEST_TOKEN and relayIngestUrl (or RELAY_INGEST_URL).",
+      "default": false
+    },
+    "relayIngestUrl": {
+      "title": "Relay API URL",
+      "type": "string",
+      "description": "Base URL of the deployed Relay Market Intelligence API, for example https://market.example.com. Required when pushToRelay is enabled.",
+      "editor": "textfield"
     }
   },
   "required": []

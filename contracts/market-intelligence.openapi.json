@@ -236,6 +236,12 @@
       "IngestionRunRequest": {
         "additionalProperties": false,
         "properties": {
+          "allow_deferred": {
+            "default": false,
+            "description": "allow an explicitly requested deferred provider; never used by scheduled runs",
+            "title": "Allow Deferred",
+            "type": "boolean"
+          },
           "apify_actor_id": {
             "anyOf": [
               {
@@ -385,14 +391,410 @@
         "title": "IngestionRunSummary",
         "type": "object"
       },
+      "MarketEvent": {
+        "description": "A structured change emitted by the Apify Actor between collection runs.",
+        "properties": {
+          "actor_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Run Id"
+          },
+          "availability_change": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Availability Change"
+          },
+          "current_available_gpu_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Available Gpu Count"
+          },
+          "current_price_per_hour_micros": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Price Per Hour Micros"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_type": {
+            "enum": [
+              "new",
+              "updated",
+              "disappeared"
+            ],
+            "title": "Event Type",
+            "type": "string"
+          },
+          "gpu_model": {
+            "title": "Gpu Model",
+            "type": "string"
+          },
+          "gpu_model_normalized": {
+            "title": "Gpu Model Normalized",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "observed_at": {
+            "title": "Observed At",
+            "type": "string"
+          },
+          "previous_available_gpu_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Available Gpu Count"
+          },
+          "previous_price_per_hour_micros": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Price Per Hour Micros"
+          },
+          "price_available": {
+            "title": "Price Available",
+            "type": "boolean"
+          },
+          "price_change_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Change Percent"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_offer_id": {
+            "title": "Provider Offer Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "event_type",
+          "provider",
+          "provider_offer_id",
+          "gpu_model",
+          "gpu_model_normalized",
+          "price_available",
+          "reason",
+          "observed_at"
+        ],
+        "title": "MarketEvent",
+        "type": "object"
+      },
+      "MarketEventIngestRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "actor_run_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Run Id"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/MarketEventInput"
+            },
+            "maxItems": 5000,
+            "minItems": 1,
+            "title": "Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "MarketEventIngestRequest",
+        "type": "object"
+      },
+      "MarketEventIngestResponse": {
+        "properties": {
+          "duplicate": {
+            "title": "Duplicate",
+            "type": "integer"
+          },
+          "inserted": {
+            "title": "Inserted",
+            "type": "integer"
+          },
+          "received": {
+            "title": "Received",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "received",
+          "inserted",
+          "duplicate"
+        ],
+        "title": "MarketEventIngestResponse",
+        "type": "object"
+      },
+      "MarketEventInput": {
+        "description": "Actor-supplied event before persistence.\n\nPrice fields use USD strings because they originate in JavaScript; they are\nvalidated and converted by the repository.",
+        "properties": {
+          "actor_run_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Run Id"
+          },
+          "availability_change": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Availability Change"
+          },
+          "current_available_gpu_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Available Gpu Count"
+          },
+          "current_price_per_hour_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Price Per Hour Usd"
+          },
+          "event_id": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_type": {
+            "enum": [
+              "new",
+              "updated",
+              "disappeared"
+            ],
+            "title": "Event Type",
+            "type": "string"
+          },
+          "gpu_model": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Gpu Model",
+            "type": "string"
+          },
+          "gpu_model_normalized": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Gpu Model Normalized",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "previous_available_gpu_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Available Gpu Count"
+          },
+          "previous_price_per_hour_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Price Per Hour Usd"
+          },
+          "price_available": {
+            "default": true,
+            "title": "Price Available",
+            "type": "boolean"
+          },
+          "price_change_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Change Percent"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_offer_id": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Provider Offer Id",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "event_type",
+          "provider",
+          "provider_offer_id",
+          "gpu_model",
+          "gpu_model_normalized",
+          "reason",
+          "observed_at"
+        ],
+        "title": "MarketEventInput",
+        "type": "object"
+      },
+      "MarketEventPage": {
+        "properties": {
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MarketEvent"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "generated_at"
+        ],
+        "title": "MarketEventPage",
+        "type": "object"
+      },
       "MarketOffer": {
         "properties": {
           "availability_scope": {
             "title": "Availability Scope",
             "type": "string"
           },
+          "available_gpu_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Gpu Count"
+          },
           "billing_scope": {
             "title": "Billing Scope",
+            "type": "string"
+          },
+          "capacity_scope": {
+            "default": "offer",
+            "title": "Capacity Scope",
             "type": "string"
           },
           "country": {
@@ -478,6 +880,11 @@
             "title": "Observed At",
             "type": "string"
           },
+          "price_available": {
+            "default": true,
+            "title": "Price Available",
+            "type": "boolean"
+          },
           "price_per_gpu_hour_micros": {
             "title": "Price Per Gpu Hour Micros",
             "type": "integer"
@@ -493,6 +900,11 @@
           "price_per_hour_minor": {
             "title": "Price Per Hour Minor",
             "type": "integer"
+          },
+          "pricing_model": {
+            "default": "fixed",
+            "title": "Pricing Model",
+            "type": "string"
           },
           "provider": {
             "title": "Provider",
@@ -699,12 +1111,22 @@
             "title": "Fresh",
             "type": "integer"
           },
+          "priced": {
+            "default": 0,
+            "title": "Priced",
+            "type": "integer"
+          },
           "providers": {
             "title": "Providers",
             "type": "integer"
           },
           "total": {
             "title": "Total",
+            "type": "integer"
+          },
+          "unpriced": {
+            "default": 0,
+            "title": "Unpriced",
             "type": "integer"
           }
         },
@@ -959,6 +1381,15 @@
             ],
             "title": "Oldest Fresh Observed At"
           },
+          "pricing_model": {
+            "enum": [
+              "fixed",
+              "bid",
+              "unknown"
+            ],
+            "title": "Pricing Model",
+            "type": "string"
+          },
           "provider": {
             "title": "Provider",
             "type": "string"
@@ -977,12 +1408,23 @@
             ],
             "title": "State",
             "type": "string"
+          },
+          "status": {
+            "enum": [
+              "operational",
+              "experimental",
+              "deferred"
+            ],
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
           "provider",
           "display_name",
           "enabled",
+          "status",
+          "pricing_model",
           "last_attempt_at",
           "last_success_at",
           "last_error_at",
@@ -1062,8 +1504,37 @@
             ],
             "title": "Last Success At"
           },
+          "pricing_model": {
+            "enum": [
+              "fixed",
+              "bid",
+              "unknown"
+            ],
+            "title": "Pricing Model",
+            "type": "string"
+          },
           "provider": {
             "title": "Provider",
+            "type": "string"
+          },
+          "requires_credentials": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires Credentials"
+          },
+          "status": {
+            "enum": [
+              "operational",
+              "experimental",
+              "deferred"
+            ],
+            "title": "Status",
             "type": "string"
           },
           "trust_tier": {
@@ -1075,6 +1546,8 @@
           "provider",
           "display_name",
           "enabled",
+          "status",
+          "pricing_model",
           "collection_mode",
           "trust_tier",
           "freshness_ttl_seconds",
@@ -1085,6 +1558,73 @@
           "last_run_id"
         ],
         "title": "ProviderRecord",
+        "type": "object"
+      },
+      "ReadinessChecks": {
+        "properties": {
+          "current_offer_state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ok",
+                  "missing",
+                  "unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Offer State"
+          },
+          "tiger_data": {
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
+            "title": "Tiger Data",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tiger_data"
+        ],
+        "title": "ReadinessChecks",
+        "type": "object"
+      },
+      "ReadinessResponse": {
+        "description": "Readiness probe payload.\n\n``checks.current_offer_state`` stays ``missing`` until migration 005 is\napplied; collection continues and reads fall back to the legacy view.",
+        "properties": {
+          "checks": {
+            "$ref": "#/components/schemas/ReadinessChecks"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "degraded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "checks",
+          "version"
+        ],
+        "title": "ReadinessResponse",
         "type": "object"
       },
       "ValidationError": {
@@ -1193,15 +1733,91 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Tiger Data is unreachable"
           }
         },
         "summary": "Readyz",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/v1/admin/ingestion/apify-webhook": {
+      "post": {
+        "description": "Ingest a completed Actor run after an Apify webhook.\n\nThe Actor normally pushes directly, and both paths use the same\nidempotency key per (run, provider). A webhook replay is therefore a\nduplicate no-op rather than a second observation.",
+        "operationId": "apify_webhook_v1_admin_ingestion_apify_webhook_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Apify Webhook V1 Admin Ingestion Apify Webhook Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apify Webhook",
+        "tags": [
+          "admin-ingestion"
         ]
       }
     },
@@ -1319,6 +1935,181 @@
         "summary": "Get Ingestion Run",
         "tags": [
           "admin-ingestion"
+        ]
+      }
+    },
+    "/v1/admin/market/events": {
+      "post": {
+        "operationId": "ingest_market_events_v1_admin_market_events_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketEventIngestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketEventIngestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Market Events",
+        "tags": [
+          "admin-market"
+        ]
+      }
+    },
+    "/v1/market/events": {
+      "get": {
+        "operationId": "get_events_v1_market_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          },
+          {
+            "in": "query",
+            "name": "event_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "new",
+                    "updated",
+                    "disappeared"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "gpu_model",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gpu Model"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketEventPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Events",
+        "tags": [
+          "market"
         ]
       }
     },
@@ -1619,6 +2410,16 @@
                 }
               ],
               "title": "Executable"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_unpriced",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Unpriced",
+              "type": "boolean"
             }
           },
           {

@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from market_intelligence import __version__
-from market_intelligence.api import admin, health, market
+from market_intelligence.api import admin, admin_market, health, market
 from market_intelligence.config import Settings, get_settings
 from market_intelligence.database import Database
 from market_intelligence.errors import ApiError, ProviderError
@@ -150,6 +150,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(market.router)
     app.include_router(admin.router)
+    app.include_router(admin_market.router)
     return app
 
 

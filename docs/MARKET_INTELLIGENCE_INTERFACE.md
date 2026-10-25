@@ -30,14 +30,29 @@ otherwise.
 
 Every observation stores:
 
-- `provider` — canonical provider key: `vastai`, `runpod`, `lambda`, `tensordock`.
-- `source` — concrete collection channel, e.g. `vastai_api`, `runpod_graphql`, `apify_actor`.
+- `provider` — canonical provider key: `vastai`, `runpod`, `akash`, `lambda`, `tensordock`.
+- `source` — concrete collection channel, e.g. `vastai_api`, `runpod_graphql`, `akash_console_api`,
+  `apify_actor`.
 - `source_url` — human-inspectable URL for the listing/pricing page.
 - `source_record_id` — provider identifier when one exists.
 - `observed_at` — when the source reported the state (UTC).
 - `ingested_at` — when Relay persisted it (UTC).
 - `raw_hash` — SHA-256 of the normalized source record, used to detect unchanged data.
 - `trust_tier` — `provider_api` or `apify_actor`.
+
+### Collection completeness
+
+Provider snapshots are not all equal. `apify_actor` reports `complete` per provider:
+
+- **Vast.ai** public search returns a capped, rotating sample of about 64 offers and exposes no
+  pagination. It is always `complete=false`. Vast observations are valid reference prices, but
+  they cannot establish a disappearance or a first-seen listing.
+- **RunPod** and **Akash** return their full advertised set unless a limit truncates it; those
+  snapshots can be `complete=true`.
+- Incomplete snapshots retain unseen previous offers and never emit `disappeared`. A `new` event
+  is only emitted when an earlier snapshot actually covered the provider.
+- **Akash** capacity is `pricing_model=bid`, `price_available=false`, and `price_per_hour=0` is a
+  sentinel, not a price. Exclude unpriced capacity from price comparisons.
 
 ### Freshness
 
@@ -54,9 +69,11 @@ live data must filter on `freshness=fresh` and `executable=true`.
 ### Deduplication
 
 Observation identity is `(provider, provider_offer_id, five_minute_bucket)`. A per-run content
-hash suppresses unchanged records inside the re-observation window. The `market_offers_current`
-view returns exactly one newest row per `(provider, provider_offer_id)`. Newest observation wins;
-when timestamps tie, `provider_api` outranks `apify_actor`.
+hash suppresses unchanged records inside the re-observation window. `market_offer_state` keeps
+exactly one winning row per `(provider, provider_offer_id)`, updated in the ingestion transaction;
+the `market_offers_current` view reads that table. Newest observation wins; when timestamps tie,
+`provider_api` outranks `apify_actor`. This keeps offer reads proportional to the number of live
+offers rather than the full observation history.
 
 Provider offer IDs are stable where the provider exposes one (Vast.ai `id`, TensorDock
 `hostnode/gpu`, Lambda `instance_type:region`). RunPod pricing is advertised per GPU type and
@@ -218,6 +235,34 @@ omitted, not zero-filled.
 
 Provider `state` ∈ `healthy`, `degraded`, `failed`, `disabled`, `never_ingested`.
 
+### MarketEvent
+
+```json
+{
+  "event_id": "evt_...",
+  "event_type": "new",
+  "provider": "runpod",
+  "provider_offer_id": "runpod:NVIDIA H100 PCIe:secure_cloud",
+  "gpu_model": "NVIDIA H100 PCIe",
+  "gpu_model_normalized": "H100",
+  "price_available": true,
+  "previous_price_per_hour_micros": null,
+  "current_price_per_hour_micros": 2150000,
+  "price_change_percent": null,
+  "previous_available_gpu_count": null,
+  "current_available_gpu_count": null,
+  "availability_change": "appeared",
+  "reason": "new_offer",
+  "observed_at": "2026-10-24T23:30:00Z",
+  "actor_run_id": "d7SPzmNXqN8KwweM4",
+  "metadata": {"complete": true, "baseline": false, "actor_run_id": "d7SPzmNXqN8KwweM4"}
+}
+```
+
+`event_type` ∈ `new`, `updated`, `disappeared`. Events are append-only and idempotent by
+`event_id`. Treat `metadata.complete=false` as evidence that the provider snapshot was partial;
+do not present it as proof that the whole market changed.
+
 ---
 
 ## 3. Public read endpoints
@@ -233,10 +278,13 @@ Query parameters:
 | Param | Type | Default | Notes |
 |---|---|---|---|
 | `provider` | string | — | one of the canonical provider keys |
-| `gpu_model` | string | — | normalized match, e.g. `H100`; `match=contains` allows `h100` substring |
+| `gpu_model` | string | — | normalized match, e.g. `H100` |
+| `gpu_match` | enum | `exact` | `exact` or `contains` |
 | `min_vram_gb` | number | — | total VRAM lower bound |
 | `max_price_per_gpu_hour_minor` | int | — | budget ceiling in cents/GPU-hour |
 | `region` | string | — | case-insensitive contains |
+| `country` | string | — | two-letter country code |
+| `include_unpriced` | bool | `false` | include Akash bid capacity and other records without a comparable price |
 | `availability_scope` | enum | — | `live_inventory` or `advertised` |
 | `executable` | bool | — | public market data is `false` |
 | `freshness` | enum | `fresh,stale` | comma-separated |
@@ -267,6 +315,21 @@ Returns the provider registry with collection mode and current freshness state.
 
 Provider health plus counts. Person B should call this before presenting a deal that depends on
 market prices.
+
+### `GET /v1/market/events`
+
+Returns the most recent cross-run change events, newest first.
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `provider` | string | — | canonical provider key |
+| `event_type` | enum | — | `new`, `updated`, `disappeared` |
+| `gpu_model` | string | — | normalized contains match |
+| `since` | ISO 8601 | — | only events observed at or after this time |
+| `limit` | int | 100 | 1–200 |
+
+Response is `{items: [MarketEvent], generated_at}`. Vast.ai never produces disappearance events
+because its public snapshot is sampled; see the completeness rules above.
 
 ---
 

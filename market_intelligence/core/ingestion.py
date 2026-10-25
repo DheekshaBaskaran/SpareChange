@@ -73,6 +73,7 @@ async def run_ingestion(
     items: list[dict[str, Any]] | None = None,
     apify_actor_id: str | None = None,
     apify_input: dict[str, Any] | None = None,
+    allow_deferred: bool = False,
 ) -> IngestionRunSummary:
     if provider not in PROVIDER_KEYS:
         raise ApiError(
@@ -80,6 +81,17 @@ async def run_ingestion(
             f"unknown provider: {provider}",
             status_code=404,
             details={"provider": provider},
+        )
+    if not settings.provider_enabled(provider) and not allow_deferred:
+        raise ApiError(
+            "provider_disabled",
+            f"{provider} is intentionally deferred and is not part of scheduled collection",
+            status_code=409,
+            details={
+                "provider": provider,
+                "enabled_providers": settings.enabled_providers,
+                "hint": "pass allow_deferred=true only for explicit development ingestion",
+            },
         )
     limit = max(1, min(limit, settings.market_max_ingest_items))
 
@@ -130,6 +142,7 @@ async def run_ingestion(
             rejected = outcome.rejected
             diagnostics.update(outcome.diagnostics)
             diagnostics["adapter"] = adapter_name
+            diagnostics["complete"] = outcome.complete
         elif mode == "apify":
             actor = ApifyActorClient(settings, client)
             raw_items, actor_diagnostics = await actor.run_and_fetch(
@@ -198,6 +211,12 @@ async def run_ingestion(
         "duplicate": insert_stats.duplicate,
         "rejected": rejected + insert_stats.rejected,
     }
+    if insert_stats.state_skipped:
+        diagnostics["current_offer_state"] = "skipped"
+        diagnostics["state_skipped"] = insert_stats.state_skipped
+        diagnostics.setdefault("warnings", []).append(
+            "market_offer_state is missing; run migration 005 as the owner role"
+        )
 
     # Always finalize in a fresh connection so a failed insert cannot leave the
     # run stuck in "running".
@@ -282,6 +301,7 @@ async def run_ingestion_batch(
     items: list[dict[str, Any]] | None = None,
     apify_actor_id: str | None = None,
     apify_input: dict[str, Any] | None = None,
+    allow_deferred: bool = False,
 ) -> list[IngestionRunSummary]:
     results: list[IngestionRunSummary] = []
     for provider in providers:
@@ -300,6 +320,7 @@ async def run_ingestion_batch(
                 items=items,
                 apify_actor_id=apify_actor_id,
                 apify_input=apify_input,
+                allow_deferred=allow_deferred,
             )
         )
     return results

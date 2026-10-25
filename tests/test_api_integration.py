@@ -16,17 +16,28 @@ PREFIX = "pytest-market-"
 GPU = "Relay Test GPU"
 
 
-def _observation(offer_id: str, price: str, observed_at: datetime) -> NormalizedObservation:
+def _observation(
+    offer_id: str,
+    price: str,
+    observed_at: datetime,
+    *,
+    provider: str = "vastai",
+    price_available: bool = True,
+) -> NormalizedObservation:
     return NormalizedObservation(
-        provider="vastai",
+        provider=provider,
         provider_offer_id=offer_id,
         gpu_model=GPU,
         gpu_count=1,
         vram_gb=80,
         price_per_hour=money(price),
+        price_available=price_available,
+        pricing_model="fixed" if price_available else "bid",
+        available_gpu_count=None if price_available else 4,
+        capacity_scope="offer" if price_available else "provider",
         currency="USD",
         billing_scope="per_instance_hour",
-        availability_scope="live_inventory",
+        availability_scope="live_inventory" if price_available else "advertised",
         executable=False,
         reliability=0.99,
         source="pytest",
@@ -70,6 +81,9 @@ async def _insert(db: Database, observations: list[NormalizedObservation]) -> tu
 async def _cleanup(db: Database) -> None:
     async with db.connection() as conn:
         await conn.execute(
+            "DELETE FROM market_offer_state WHERE provider_offer_id LIKE %s", (f"{PREFIX}%",)
+        )
+        await conn.execute(
             "DELETE FROM market_observations WHERE provider_offer_id LIKE %s", (f"{PREFIX}%",)
         )
         await conn.execute(
@@ -78,6 +92,9 @@ async def _cleanup(db: Database) -> None:
         )
         await conn.execute(
             "DELETE FROM ingestion_runs WHERE idempotency_key LIKE %s", ("pytest-%",)
+        )
+        await conn.execute(
+            "DELETE FROM market_events WHERE event_id LIKE %s", (f"{PREFIX}%",)
         )
 
 
@@ -230,6 +247,71 @@ async def test_admin_ingestion_items_and_auth(
 
 
 @pytest.mark.asyncio
+async def test_ingestion_survives_missing_state_table(
+    database: Database,
+    api_client: httpx.AsyncClient,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _missing(_conn: object) -> bool:
+        return False
+
+    monkeypatch.setattr(repository, "market_offer_state_available", _missing)
+    item = {
+        "provider": "vastai",
+        "provider_offer_id": f"{PREFIX}nostate",
+        "gpu_model": GPU,
+        "gpu_count": 1,
+        "vram_gb": 80,
+        "price_per_hour_usd": "1.75",
+        "billing_scope": "per_gpu_hour",
+        "availability_scope": "live_inventory",
+        "observed_at": utc_now().isoformat(),
+    }
+    headers = {"Authorization": f"Bearer {settings.market_admin_token}"}
+    try:
+        created = await api_client.post(
+            "/v1/admin/ingestion/runs",
+            json={
+                "provider": "vastai",
+                "mode": "items",
+                "items": [item],
+                "idempotency_key": f"pytest-nostate-{uuid4()}",
+            },
+            headers=headers,
+        )
+        assert created.status_code == 200, created.text
+        run = created.json()["runs"][0]
+        assert run["status"] == "succeeded"
+        assert run["inserted"] == 1
+
+        detail = await api_client.get(
+            f"/v1/admin/ingestion/runs/{run['run_id']}", headers=headers
+        )
+        diagnostics = detail.json()["diagnostics"]
+        assert diagnostics["current_offer_state"] == "skipped"
+        assert diagnostics["state_skipped"] == 1
+        assert "005" in diagnostics["warnings"][0]
+
+        history = await api_client.get(
+            "/v1/market/history",
+            params={"gpu_model": GPU, "bucket": "1h"},
+        )
+        assert history.status_code == 200, history.text
+
+        async with database.connection() as conn:
+            cursor = await conn.execute(
+                "SELECT count(*) AS count FROM market_observations "
+                "WHERE provider_offer_id = %s",
+                (f"{PREFIX}nostate",),
+            )
+            row = await cursor.fetchone()
+        assert row["count"] == 1
+    finally:
+        await _cleanup(database)
+
+
+@pytest.mark.asyncio
 async def test_skipped_provider_and_idempotent_replay(
     database: Database, api_client: httpx.AsyncClient, settings: Settings
 ) -> None:
@@ -257,10 +339,8 @@ async def test_skipped_provider_and_idempotent_replay(
             },
             headers=headers,
         )
-        assert skipped.status_code == 200, skipped.text
-        run = skipped.json()["runs"][0]
-        assert run["status"] == "skipped"
-        assert run["inserted"] == 0
+        assert skipped.status_code == 409, skipped.text
+        assert skipped.json()["error"]["code"] == "provider_disabled"
 
         key = f"pytest-idem-{uuid4()}"
         payload = {
@@ -282,13 +362,176 @@ async def test_skipped_provider_and_idempotent_replay(
 async def test_freshness_and_providers(database: Database, api_client: httpx.AsyncClient) -> None:
     response = await api_client.get("/v1/market/providers")
     assert response.status_code == 200
-    providers = {item["provider"] for item in response.json()}
-    assert providers == {"vastai", "runpod", "lambda", "tensordock"}
+    rows = response.json()
+    providers = {item["provider"] for item in rows}
+    assert providers == {"vastai", "runpod", "akash", "lambda", "tensordock"}
+    enabled = {item["provider"] for item in rows if item["enabled"]}
+    assert enabled == {"vastai", "runpod", "akash"}
+    assert {item["provider"] for item in rows if item["status"] == "deferred"} == {
+        "lambda",
+        "tensordock",
+    }
 
     freshness = await api_client.get("/v1/market/freshness")
     assert freshness.status_code == 200
     payload = freshness.json()
     assert {item["provider"] for item in payload["providers"]} == providers
+    assert {item["provider"] for item in payload["providers"] if item["enabled"]} == enabled
+
+
+@pytest.mark.asyncio
+async def test_unpriced_capacity_is_excluded_from_price_analytics(
+    database: Database, api_client: httpx.AsyncClient
+) -> None:
+    now = utc_now()
+    try:
+        priced = _observation(f"{PREFIX}priced", "2.00", now - timedelta(minutes=2))
+        unpriced = _observation(
+            f"{PREFIX}capacity",
+            "0",
+            now - timedelta(minutes=2),
+            provider="akash",
+            price_available=False,
+        )
+        await _insert(database, [priced, unpriced])
+
+        default = await api_client.get(
+            "/v1/market/offers", params={"gpu_model": GPU, "limit": 20}
+        )
+        assert default.status_code == 200, default.text
+        ids = {item["provider_offer_id"] for item in default.json()["items"]}
+        assert ids == {f"{PREFIX}priced"}
+
+        with_capacity = await api_client.get(
+            "/v1/market/offers",
+            params={"gpu_model": GPU, "include_unpriced": "true", "limit": 20},
+        )
+        assert with_capacity.status_code == 200, with_capacity.text
+        capacity = next(
+            item
+            for item in with_capacity.json()["items"]
+            if item["provider_offer_id"] == f"{PREFIX}capacity"
+        )
+        assert capacity["price_available"] is False
+        assert capacity["pricing_model"] == "bid"
+        assert capacity["executable"] is False
+        assert capacity["capacity_scope"] == "provider"
+
+        history = await api_client.get(
+            "/v1/market/history",
+            params={
+                "gpu_model": GPU,
+                "bucket": "1h",
+                "from": (now - timedelta(hours=2)).isoformat(),
+                "to": now.isoformat(),
+            },
+        )
+        assert history.status_code == 200, history.text
+        assert sum(point["sample_count"] for point in history.json()["points"]) == 1
+
+        summary = await api_client.get(
+            "/v1/market/summary", params={"window": "24h", "limit": 100}
+        )
+        assert summary.status_code == 200, summary.text
+        gpu = next(
+            item
+            for item in summary.json()["gpus"]
+            if item["gpu_model_normalized"] == GPU.upper()
+        )
+        assert gpu["fresh_offer_count"] == 1
+        assert summary.json()["offers"]["unpriced"] >= 1
+    finally:
+        await _cleanup(database)
+
+
+@pytest.mark.asyncio
+async def test_market_event_ingestion_and_read(
+    database: Database, api_client: httpx.AsyncClient, settings: Settings
+) -> None:
+    event_id = f"{PREFIX}evt-1"
+    payload = {
+        "actor_run_id": "run-pytest",
+        "events": [
+            {
+                "event_id": event_id,
+                "event_type": "updated",
+                "provider": "vastai",
+                "provider_offer_id": f"{PREFIX}event-offer",
+                "gpu_model": "NVIDIA H100 PCIe",
+                "gpu_model_normalized": "H100",
+                "price_available": True,
+                "previous_price_per_hour_usd": "2.00",
+                "current_price_per_hour_usd": "2.50",
+                "price_change_percent": 25.0,
+                "reason": "price_increase",
+                "observed_at": utc_now().isoformat(),
+                "metadata": {"test": True},
+            }
+        ],
+    }
+    headers = {"Authorization": f"Bearer {settings.market_admin_token}"}
+    try:
+        created = await api_client.post(
+            "/v1/admin/market/events", json=payload, headers=headers
+        )
+        assert created.status_code == 200, created.text
+        assert created.json() == {"received": 1, "inserted": 1, "duplicate": 0}
+
+        replay = await api_client.post(
+            "/v1/admin/market/events", json=payload, headers=headers
+        )
+        assert replay.status_code == 200
+        assert replay.json()["duplicate"] == 1
+
+        events = await api_client.get(
+            "/v1/market/events", params={"provider": "vastai", "limit": 10}
+        )
+        assert events.status_code == 200, events.text
+        item = next(
+            event for event in events.json()["items"] if event["event_id"] == event_id
+        )
+        assert item["event_type"] == "updated"
+        assert item["current_price_per_hour_micros"] == 2_500_000
+        assert item["previous_price_per_hour_micros"] == 2_000_000
+        assert item["price_change_percent"] == 25.0
+    finally:
+        await _cleanup(database)
+
+
+@pytest.mark.asyncio
+async def test_current_state_keeps_newest_on_out_of_order_replay(
+    database: Database, api_client: httpx.AsyncClient
+) -> None:
+    now = utc_now()
+    try:
+        offer_id = f"{PREFIX}state-order"
+        newer = _observation(offer_id, "3.00", now - timedelta(minutes=1))
+        older = _observation(offer_id, "1.00", now - timedelta(hours=2))
+        await _insert(database, [newer])
+        # A webhook replay can arrive out of order; it must not overwrite state.
+        await _insert(database, [older])
+
+        response = await api_client.get(
+            "/v1/market/offers",
+            params={"gpu_model": GPU, "limit": 10, "include_stale": True},
+        )
+        assert response.status_code == 200, response.text
+        item = next(
+            offer for offer in response.json()["items"]
+            if offer["provider_offer_id"] == offer_id
+        )
+        assert item["price_per_hour_minor"] == 300
+
+        async with database.connection() as conn:
+            cursor = await conn.execute(
+                "SELECT observed_at, price_per_hour FROM market_offer_state "
+                "WHERE provider_offer_id = %s",
+                (offer_id,),
+            )
+            row = await cursor.fetchone()
+        assert row["price_per_hour"] == 3
+    finally:
+        await _cleanup(database)
 
 
 @pytest.mark.asyncio

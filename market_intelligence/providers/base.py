@@ -27,6 +27,9 @@ class FetchOutcome:
     items: list[NormalizedObservation] = field(default_factory=list)
     fetched: int = 0
     rejected: int = 0
+    # False when the adapter had to truncate the source. Change detection must
+    # not infer that an unseen offer disappeared from an incomplete collection.
+    complete: bool = True
     diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
@@ -41,6 +44,7 @@ class ProviderAdapter(ABC):
     display_name: str
     source: str
     trust_tier: TrustTier
+    pricing_model: str = "fixed"
     requires_env: str | None = None
 
     def __init__(self, settings: Settings, client: httpx.AsyncClient) -> None:

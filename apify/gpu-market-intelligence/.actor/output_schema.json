@@ -1,0 +1,25 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "Relay GPU market intelligence output",
+  "description": "Normalized offers, cross-run market events, and a diagnostics summary.",
+  "properties": {
+    "offers": {
+      "type": "string",
+      "title": "Normalized offers",
+      "description": "Default dataset with source provenance, pricing semantics, and capacity scope.",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
+    },
+    "events": {
+      "type": "string",
+      "title": "Market events",
+      "description": "New, updated, and disappeared offers for this run.",
+      "template": "{{storages.datasets.events.apiUrl}}/items"
+    },
+    "summary": {
+      "type": "string",
+      "title": "Run summary",
+      "description": "Per-provider collection statistics, freshness, failures, filters, change counts, and Relay push result.",
+      "template": "{{links.apiDefaultKeyValueStoreUrl}}/records/SUMMARY"
+    }
+  }
+}

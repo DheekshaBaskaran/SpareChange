@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: relay-market-api
+  namespace: relay
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: relay-market-api
+  template:
+    metadata:
+      labels:
+        app: relay-market-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: registry.example.com/relay/market-api:REPLACE_TAG
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: relay-market-secrets
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: relay-market-api
+  namespace: relay
+  annotations:
+    service.beta.kubernetes.io/vultr-loadbalancer-protocol: "https"
+    service.beta.kubernetes.io/vultr-loadbalancer-backend-protocol: "http"
+    service.beta.kubernetes.io/vultr-loadbalancer-https-ports: "443"
+    service.beta.kubernetes.io/vultr-loadbalancer-ssl: "market-api-tls"
+    service.beta.kubernetes.io/vultr-loadbalancer-ssl-redirect: "true"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: relay-market-api
+  ports:
+    - name: https
+      port: 443
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: relay-market-api
+  namespace: relay
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: relay-market-api
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: relay-market-api
+  namespace: relay
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: relay-market-api

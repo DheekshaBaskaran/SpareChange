@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     apify_token: str = ""
     apify_actor_id: str = ""
     apify_timeout_seconds: int = 120
+    apify_webhook_max_items: int = 5000
+
+    # Provider policy. Lambda and TensorDock adapters are preserved but disabled:
+    # their accounts require payment details or vendor contact and they are not
+    # part of scheduled collection or public demos.
+    market_enabled_providers: str = "vastai,runpod,akash"
 
     # Provider credentials (all optional at boot; adapters report missing creds)
     vastai_api_key: str = ""
@@ -47,6 +53,7 @@ class Settings(BaseSettings):
     lambda_base_url: str = "https://cloud.lambdalabs.com/api/v1"
     tensordock_api_key: str = ""
     tensordock_base_url: str = "https://dashboard.tensordock.com/api/v2"
+    akash_base_url: str = "https://console-api.akash.network/v1"
 
     # Data policy
     market_fresh_ttl_seconds: int = 900
@@ -56,6 +63,7 @@ class Settings(BaseSettings):
     market_ingestion_timeout_seconds: float = 120.0
     market_observation_bucket_seconds: int = 300
     market_reobserve_seconds: int = 300
+    market_event_max_batch: int = 5000
 
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
@@ -75,6 +83,14 @@ class Settings(BaseSettings):
     def allowed_origins(self) -> list[str]:
         origins = [item.strip() for item in self.cors_origins.split(",")]
         return [origin for origin in origins if origin]
+
+    @property
+    def enabled_providers(self) -> list[str]:
+        configured = [item.strip().lower() for item in self.market_enabled_providers.split(",")]
+        return [item for item in configured if item]
+
+    def provider_enabled(self, provider: str) -> bool:
+        return provider in self.enabled_providers
 
     def provider_ttl(self, availability_scope: str) -> int:
         if availability_scope == "advertised":

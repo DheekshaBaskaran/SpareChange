@@ -1,0 +1,159 @@
+{
+  "actorSpecification": 1,
+  "title": "Relay market events",
+  "description": "New, updated, and disappeared offers detected against persistent Actor state. Disappearance is suppressed when a source fails or truncates.",
+  "fields": {
+    "type": "object",
+    "properties": {
+      "event_id": {
+        "type": "string",
+        "title": "Event ID",
+        "description": "Deterministic ID for this provider, offer, event type, and Actor run.",
+        "example": "evt_8b2f1c9d7e0a4f3b6c5d2e1a"
+      },
+      "event_type": {
+        "type": "string",
+        "title": "Event type",
+        "description": "new means first seen; updated means price or capacity changed; disappeared means a complete collection no longer listed it.",
+        "enum": ["new", "updated", "disappeared"],
+        "example": "updated"
+      },
+      "provider": {
+        "type": "string",
+        "title": "Provider",
+        "enum": ["vastai", "runpod", "akash"],
+        "example": "vastai"
+      },
+      "provider_offer_id": {
+        "type": "string",
+        "title": "Provider offer ID",
+        "example": "54550274"
+      },
+      "gpu_model": {
+        "type": "string",
+        "title": "GPU model",
+        "example": "NVIDIA GeForce RTX 4090"
+      },
+      "gpu_model_normalized": {
+        "type": "string",
+        "title": "Normalized GPU",
+        "example": "RTX 4090"
+      },
+      "price_available": {
+        "type": "boolean",
+        "title": "Price available",
+        "description": "False for unpriced capacity changes.",
+        "example": true
+      },
+      "previous_price_per_hour_usd": {
+        "type": ["string", "null"],
+        "title": "Previous USD/hour",
+        "example": "0.950000"
+      },
+      "current_price_per_hour_usd": {
+        "type": ["string", "null"],
+        "title": "Current USD/hour",
+        "example": "1.050000"
+      },
+      "price_change_percent": {
+        "type": ["number", "null"],
+        "title": "Price change %",
+        "description": "Signed percentage change, or null when a price is unavailable.",
+        "example": 10.5263
+      },
+      "previous_available_gpu_count": {
+        "type": ["integer", "null"],
+        "title": "Previous available GPUs",
+        "example": null
+      },
+      "current_available_gpu_count": {
+        "type": ["integer", "null"],
+        "title": "Current available GPUs",
+        "example": null
+      },
+      "availability_change": {
+        "type": ["string", "null"],
+        "title": "Availability change",
+        "enum": [
+          "appeared",
+          "disappeared",
+          "capacity_increased",
+          "capacity_decreased",
+          "none",
+          null
+        ],
+        "example": "none"
+      },
+      "reason": {
+        "type": "string",
+        "title": "Reason",
+        "description": "Machine-readable reason such as price_increase, capacity_decrease, or no_longer_listed.",
+        "example": "price_increase"
+      },
+      "observed_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Observed at",
+        "example": "2026-10-24T23:30:00.000Z"
+      },
+      "actor_run_id": {
+        "type": ["string", "null"],
+        "title": "Actor run ID",
+        "example": "abc123"
+      },
+      "metadata": {
+        "type": "object",
+        "title": "Metadata",
+        "description": "Includes actor_run_id, complete, and baseline flags."
+      }
+    },
+    "required": [
+      "event_id",
+      "event_type",
+      "provider",
+      "provider_offer_id",
+      "gpu_model",
+      "gpu_model_normalized",
+      "reason",
+      "observed_at"
+    ]
+  },
+  "views": {
+    "events": {
+      "title": "Market events",
+      "transformation": {
+        "fields": [
+          "event_type",
+          "provider",
+          "gpu_model",
+          "provider_offer_id",
+          "price_available",
+          "previous_price_per_hour_usd",
+          "current_price_per_hour_usd",
+          "price_change_percent",
+          "availability_change",
+          "reason",
+          "observed_at",
+          "actor_run_id"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "event_type": { "label": "Event" },
+          "provider": { "label": "Provider" },
+          "gpu_model": { "label": "GPU" },
+          "provider_offer_id": { "label": "Offer ID" },
+          "price_available": { "label": "Priced", "format": "boolean" },
+          "previous_price_per_hour_usd": { "label": "Previous USD/h" },
+          "current_price_per_hour_usd": { "label": "Current USD/h" },
+          "price_change_percent": { "label": "Change %", "format": "number" },
+          "availability_change": { "label": "Availability" },
+          "reason": { "label": "Reason" },
+          "observed_at": { "label": "Observed", "format": "date" },
+          "actor_run_id": { "label": "Run" }
+        }
+      }
+    }
+  }
+}

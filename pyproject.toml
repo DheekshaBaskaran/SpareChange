@@ -21,6 +21,7 @@ dev = [
 [project.scripts]
 relay-market-api = "market_intelligence.runtime:main"
 relay-market-ingest = "market_intelligence.scripts.run_ingestion:main"
+relay-market-reconcile = "market_intelligence.scripts.reconcile_apify:main"
 relay-market-export-openapi = "market_intelligence.scripts.export_openapi:main"
 
 [build-system]

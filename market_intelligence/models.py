@@ -8,12 +8,14 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator, model_validator
 
-PROVIDERS = ("vastai", "runpod", "lambda", "tensordock")
+PROVIDERS = ("vastai", "runpod", "akash", "lambda", "tensordock")
 TrustTier = Literal["provider_api", "apify_actor", "manual"]
 AvailabilityScope = Literal["live_inventory", "advertised"]
 BillingScope = Literal["per_instance_hour", "per_gpu_hour", "per_hour"]
 Freshness = Literal["fresh", "stale", "expired"]
 RunStatus = Literal["running", "succeeded", "partial", "failed", "skipped"]
+PricingModel = Literal["fixed", "bid", "unknown"]
+ProviderStatus = Literal["operational", "experimental", "deferred"]
 
 
 def _serialize_utc(value: datetime) -> str:
@@ -53,10 +55,14 @@ class NormalizedObservation(BaseModel):
     region: str | None = Field(default=None, max_length=160)
     country: str | None = Field(default=None, max_length=2)
     price_per_hour: Decimal = Field(ge=0, le=Decimal("100000"), decimal_places=6)
+    price_available: bool = True
+    pricing_model: PricingModel = "fixed"
     currency: str = Field(default="USD", min_length=3, max_length=3)
     billing_scope: BillingScope
     availability_scope: AvailabilityScope
     executable: bool = False
+    available_gpu_count: int | None = Field(default=None, ge=0)
+    capacity_scope: Literal["offer", "provider"] = "offer"
     reliability: float | None = Field(default=None, ge=0, le=1)
     source: str = Field(min_length=1, max_length=80)
     source_url: str | None = Field(default=None, max_length=500)
@@ -91,6 +97,19 @@ class NormalizedObservation(BaseModel):
             self.gpu_model_normalized = normalize_gpu_model(self.gpu_model)
         return self
 
+    @model_validator(mode="after")
+    def _validate_price_semantics(self) -> "NormalizedObservation":
+        if not self.price_available:
+            if self.price_per_hour != 0:
+                raise ValueError("unpriced observations must use price_per_hour=0")
+            if self.pricing_model == "fixed":
+                self.pricing_model = "bid"
+        elif self.price_per_hour <= 0:
+            raise ValueError("priced observations require a positive price_per_hour")
+        if self.capacity_scope == "provider" and self.available_gpu_count is None:
+            raise ValueError("provider capacity requires available_gpu_count")
+        return self
+
     @property
     def price_per_gpu_hour(self) -> Decimal:
         return (self.price_per_hour / self.gpu_count).quantize(Decimal("0.000001"))
@@ -117,6 +136,10 @@ class MarketOffer(BaseModel):
     billing_scope: str
     availability_scope: str
     executable: bool
+    price_available: bool = True
+    pricing_model: str = "fixed"
+    available_gpu_count: int | None = None
+    capacity_scope: str = "offer"
     source: str
     source_url: str | None
     source_record_id: str | None
@@ -173,6 +196,8 @@ class OfferCounts(BaseModel):
     fresh: int
     providers: int
     executable: int
+    priced: int = 0
+    unpriced: int = 0
 
 
 class GpuSummary(BaseModel):
@@ -196,6 +221,9 @@ class ProviderRecord(BaseModel):
     provider: str
     display_name: str
     enabled: bool
+    status: ProviderStatus
+    pricing_model: PricingModel
+    requires_credentials: str | None = None
     collection_mode: str
     trust_tier: str
     freshness_ttl_seconds: int
@@ -210,6 +238,8 @@ class ProviderFreshness(BaseModel):
     provider: str
     display_name: str
     enabled: bool
+    status: ProviderStatus
+    pricing_model: PricingModel
     last_attempt_at: UtcDateTime | None
     last_success_at: UtcDateTime | None
     last_error_at: UtcDateTime | None
@@ -262,12 +292,18 @@ class IngestionRunRequest(BaseModel):
     items: list[dict[str, Any]] | None = None
     apify_actor_id: str | None = None
     apify_input: dict[str, Any] | None = None
+    allow_deferred: bool = Field(
+        default=False,
+        description="allow an explicitly requested deferred provider; never used by scheduled runs",
+    )
 
     @field_validator("provider")
     @classmethod
     def _provider_value(cls, value: str) -> str:
         if value != "all" and value not in PROVIDERS:
-            raise ValueError("provider must be one of vastai, runpod, lambda, tensordock, all")
+            raise ValueError(
+                "provider must be one of vastai, runpod, akash, lambda, tensordock, all"
+            )
         return value
 
 
@@ -278,6 +314,104 @@ class ActorItemsRequest(BaseModel):
     actor_run_id: str | None = None
     items: list[dict[str, Any]] = Field(min_length=1, max_length=5000)
     idempotency_key: str | None = None
+
+
+class MarketEvent(BaseModel):
+    """A structured change emitted by the Apify Actor between collection runs."""
+
+    event_id: str
+    event_type: Literal["new", "updated", "disappeared"]
+    provider: str
+    provider_offer_id: str
+    gpu_model: str
+    gpu_model_normalized: str
+    price_available: bool
+    previous_price_per_hour_micros: int | None = None
+    current_price_per_hour_micros: int | None = None
+    price_change_percent: float | None = None
+    previous_available_gpu_count: int | None = None
+    current_available_gpu_count: int | None = None
+    availability_change: str | None = None
+    reason: str
+    observed_at: UtcDateTime
+    actor_run_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MarketEventPage(BaseModel):
+    items: list[MarketEvent]
+    generated_at: UtcDateTime
+
+
+class MarketEventInput(BaseModel):
+    """Actor-supplied event before persistence.
+
+    Price fields use USD strings because they originate in JavaScript; they are
+    validated and converted by the repository.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    event_id: str = Field(min_length=1, max_length=240)
+    event_type: Literal["new", "updated", "disappeared"]
+    provider: str
+    provider_offer_id: str = Field(min_length=1, max_length=240)
+    gpu_model: str = Field(min_length=1, max_length=160)
+    gpu_model_normalized: str = Field(min_length=1, max_length=80)
+    price_available: bool = True
+    previous_price_per_hour_usd: Decimal | None = Field(default=None, ge=0)
+    current_price_per_hour_usd: Decimal | None = Field(default=None, ge=0)
+    price_change_percent: float | None = None
+    previous_available_gpu_count: int | None = Field(default=None, ge=0)
+    current_available_gpu_count: int | None = Field(default=None, ge=0)
+    availability_change: str | None = Field(default=None, max_length=40)
+    reason: str = Field(min_length=1, max_length=80)
+    observed_at: datetime
+    actor_run_id: str | None = Field(default=None, max_length=120)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("provider")
+    @classmethod
+    def _known_event_provider(cls, value: str) -> str:
+        if value not in PROVIDERS:
+            raise ValueError(f"unknown provider: {value}")
+        return value
+
+    @field_validator("observed_at")
+    @classmethod
+    def _utc_event_time(cls, value: datetime) -> datetime:
+        return _ensure_utc(value)
+
+
+class MarketEventIngestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actor_run_id: str | None = Field(default=None, max_length=120)
+    events: list[MarketEventInput] = Field(min_length=1, max_length=5000)
+
+
+class MarketEventIngestResponse(BaseModel):
+    received: int
+    inserted: int
+    duplicate: int
+
+
+class ReadinessChecks(BaseModel):
+    tiger_data: Literal["ok", "unavailable"]
+    current_offer_state: Literal["ok", "missing", "unknown"] | None = None
+
+
+class ReadinessResponse(BaseModel):
+    """Readiness probe payload.
+
+    ``checks.current_offer_state`` stays ``missing`` until migration 005 is
+    applied; collection continues and reads fall back to the legacy view.
+    """
+
+    status: Literal["ready", "degraded"]
+    checks: ReadinessChecks
+    warnings: list[str] = Field(default_factory=list)
+    version: str
 
 
 class ErrorBody(BaseModel):

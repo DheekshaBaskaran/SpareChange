@@ -83,15 +83,18 @@ class RunpodAdapter(ProviderAdapter):
                 reason = str(exc)[:160] or type(exc).__name__
                 reasons[reason] = reasons.get(reason, 0) + 1
 
+        emitted = len(items)
+        truncated = emitted > limit
         items = items[:limit]
         return FetchOutcome(
             items=items,
             fetched=len(gpu_types),
             rejected=rejected,
+            complete=not truncated,
             diagnostics={
                 "returned_gpu_types": len(gpu_types),
                 "emitted_offers": len(items),
-                "truncated": len(items) < len(gpu_types) * 2 and len(items) == limit,
+                "truncated": truncated,
                 "rejected_reasons": reasons,
                 "endpoint": self.settings.runpod_graphql_url,
                 "authenticated": bool(self.settings.runpod_api_key),

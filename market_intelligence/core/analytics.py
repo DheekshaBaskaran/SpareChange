@@ -5,8 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from market_intelligence.config import Settings
 from market_intelligence.core.normalization import normalize_gpu_model, utc_now
 from market_intelligence.models import (
+    MarketEvent,
+    MarketEventPage,
     FreshnessReport,
     GpuSummary,
     MarketOffer,
@@ -19,6 +22,7 @@ from market_intelligence.models import (
     ProviderFreshness,
     ProviderRecord,
 )
+from market_intelligence.providers.registry import provider_metadata
 
 
 def build_offer_page(
@@ -127,31 +131,61 @@ def build_summary(
             fresh=totals.get("fresh", 0),
             providers=totals.get("providers", 0),
             executable=totals.get("executable", 0),
+            priced=totals.get("priced", 0),
+            unpriced=totals.get("unpriced", 0),
         ),
         gpus=gpus,
     )
 
 
-def build_providers(rows: list[dict[str, Any]]) -> list[ProviderRecord]:
-    return [ProviderRecord(**row) for row in rows]
-
-
-def build_freshness(rows: list[dict[str, Any]]) -> FreshnessReport:
-    providers = [
-        ProviderFreshness(
-            provider=row["provider"],
-            display_name=row["display_name"],
-            enabled=row["enabled"],
-            last_attempt_at=row["last_attempt_at"],
-            last_success_at=row["last_success_at"],
-            last_error_at=row["last_error_at"],
-            consecutive_failures=row["consecutive_failures"],
-            fresh_offer_count=row["fresh_offer_count"],
-            stale_offer_count=row["stale_offer_count"],
-            oldest_fresh_observed_at=row["oldest_fresh_observed_at"],
-            last_run_id=row["last_run_id"],
-            state=row["state"],
+def build_providers(rows: list[dict[str, Any]], settings: Settings) -> list[ProviderRecord]:
+    records: list[ProviderRecord] = []
+    for row in rows:
+        meta = provider_metadata(row["provider"])
+        row_data = {key: value for key, value in row.items() if key != "enabled"}
+        records.append(
+            ProviderRecord(
+                **row_data,
+                enabled=settings.provider_enabled(row["provider"]),
+                status=meta.status,
+                pricing_model=meta.pricing_model,
+                requires_credentials=meta.requires_credentials,
+            )
         )
-        for row in rows
-    ]
+    return records
+
+
+def build_freshness(rows: list[dict[str, Any]], settings: Settings) -> FreshnessReport:
+    providers: list[ProviderFreshness] = []
+    for row in rows:
+        meta = provider_metadata(row["provider"])
+        enabled = settings.provider_enabled(row["provider"])
+        state = row["state"]
+        if not enabled:
+            state = "disabled"
+        providers.append(
+            ProviderFreshness(
+                provider=row["provider"],
+                display_name=row["display_name"],
+                enabled=enabled,
+                status=meta.status,
+                pricing_model=meta.pricing_model,
+                last_attempt_at=row["last_attempt_at"],
+                last_success_at=row["last_success_at"],
+                last_error_at=row["last_error_at"],
+                consecutive_failures=row["consecutive_failures"],
+                fresh_offer_count=row["fresh_offer_count"],
+                stale_offer_count=row["stale_offer_count"],
+                oldest_fresh_observed_at=row["oldest_fresh_observed_at"],
+                last_run_id=row["last_run_id"],
+                state=state,
+            )
+        )
     return FreshnessReport(providers=providers, generated_at=utc_now())
+
+
+def build_events(rows: list[dict[str, Any]]) -> MarketEventPage:
+    return MarketEventPage(
+        items=[MarketEvent(**row) for row in rows],
+        generated_at=utc_now(),
+    )

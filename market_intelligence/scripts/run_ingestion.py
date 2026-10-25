@@ -12,13 +12,13 @@ import httpx
 from market_intelligence.config import Settings
 from market_intelligence.core.ingestion import run_ingestion_batch
 from market_intelligence.database import Database
-from market_intelligence.providers.registry import PROVIDER_KEYS
+from market_intelligence.providers.registry import PROVIDER_KEYS, enabled_provider_keys
 
 
 async def _main(args: argparse.Namespace) -> int:
     settings = Settings()
     logging.basicConfig(level=getattr(logging, args.log_level.upper(), logging.INFO))
-    providers = list(PROVIDER_KEYS) if args.provider == "all" else [args.provider]
+    providers = enabled_provider_keys(settings) if args.provider == "all" else [args.provider]
     db = Database(settings)
     await db.connect()
     client = httpx.AsyncClient(
@@ -35,6 +35,7 @@ async def _main(args: argparse.Namespace) -> int:
             limit=args.limit,
             trigger="cli",
             idempotency_key=args.idempotency_key,
+            allow_deferred=args.allow_deferred,
         )
     finally:
         await client.aclose()
@@ -57,6 +58,11 @@ def main() -> None:
     parser.add_argument("--mode", choices=["direct", "apify"], default="direct")
     parser.add_argument("--limit", type=int, default=200)
     parser.add_argument("--idempotency-key", default=None)
+    parser.add_argument(
+        "--allow-deferred",
+        action="store_true",
+        help="explicitly allow a deferred adapter (Lambda/TensorDock) for development",
+    )
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
     raise SystemExit(asyncio.run(_main(args)))

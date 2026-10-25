@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
 _PRICE_QUANTUM = Decimal("0.000001")
-_GB_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*(?:GB|GiB|G)\b", re.IGNORECASE)
+_GB_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*(?:GiB|GB|Gi|G)\b", re.IGNORECASE)
 _COUNTRY_SUFFIX = re.compile(r"(?:^|[,\s])([A-Z]{2})$")
 _UNKNOWN_GPU_PREFIX = re.compile(
     r"\b(?:nvidia|geforce|amd|instinct|tesla|graphics)\b", re.IGNORECASE

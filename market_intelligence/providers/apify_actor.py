@@ -139,6 +139,119 @@ class ApifyActorClient:
         }
         return [item for item in items if isinstance(item, dict)], diagnostics
 
+    async def fetch_existing_run_events(self, run_id: str) -> list[dict[str, Any]]:
+        """Fetch the named ``events`` dataset from a completed Actor run.
+
+        Older runs may not have a SUMMARY or events dataset; those are treated
+        as empty rather than as a failure so offer replay still works.
+        """
+        token = self.settings.apify_token
+        if not token:
+            raise ProviderCredentialsMissing("apify", "APIFY_TOKEN")
+
+        response = await self.client.get(
+            f"{APIFY_API}/actor-runs/{quote(run_id, safe='')}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30,
+        )
+        if response.status_code >= 400:
+            return []
+        run = response.json().get("data", {})
+        store_id = run.get("defaultKeyValueStoreId")
+        if not store_id:
+            return []
+
+        summary_response = await self.client.get(
+            f"{APIFY_API}/key-value-stores/{quote(store_id, safe='')}/records/SUMMARY",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30,
+        )
+        if summary_response.status_code >= 400:
+            return []
+        summary = summary_response.json()
+        events_dataset_id = (
+            summary.get("datasets", {}).get("events_dataset_id")
+            if isinstance(summary, dict)
+            else None
+        )
+        if not events_dataset_id:
+            return []
+
+        items_response = await self.client.get(
+            f"{APIFY_API}/datasets/{quote(str(events_dataset_id), safe='')}/items",
+            params={"format": "json", "clean": "true", "limit": 5000},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=60,
+        )
+        if items_response.status_code >= 400:
+            return []
+        items = items_response.json()
+        return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+
+    async def fetch_existing_run(self, run_id: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Fetch the default dataset of an already completed Actor run.
+
+        Used by the Apify webhook fallback. The run must have succeeded; a
+        failed or aborted run never overwrites market state.
+        """
+        token = self.settings.apify_token
+        if not token:
+            raise ProviderCredentialsMissing("apify", "APIFY_TOKEN")
+
+        response = await self.client.get(
+            f"{APIFY_API}/actor-runs/{quote(run_id, safe='')}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30,
+        )
+        if response.status_code >= 400:
+            raise ProviderError(
+                "apify",
+                f"Apify run lookup failed (HTTP {response.status_code})",
+                retryable=response.status_code >= 500,
+                upstream_status=response.status_code,
+                details={"run_id": run_id},
+            )
+        run = response.json().get("data", {})
+        status = str(run.get("status") or "UNKNOWN")
+        dataset_id = run.get("defaultDatasetId")
+        if status != "SUCCEEDED":
+            raise ProviderError(
+                "apify",
+                f"Apify run {run_id} is {status}; dataset was not ingested",
+                retryable=False,
+                details={"run_id": run_id, "status": status},
+            )
+        if not dataset_id:
+            raise ProviderError(
+                "apify", "Apify run has no default dataset", retryable=False
+            )
+
+        items_response = await self.client.get(
+            f"{APIFY_API}/datasets/{dataset_id}/items",
+            params={"format": "json", "clean": "true", "limit": 5000},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=60,
+        )
+        if items_response.status_code >= 400:
+            raise ProviderError(
+                "apify",
+                f"Apify dataset download failed (HTTP {items_response.status_code})",
+                retryable=True,
+                upstream_status=items_response.status_code,
+                details={"run_id": run_id, "dataset_id": dataset_id},
+            )
+        items = items_response.json()
+        if not isinstance(items, list):
+            raise ProviderError(
+                "apify", "Apify dataset did not return a JSON array", retryable=False
+            )
+        return [item for item in items if isinstance(item, dict)], {
+            "run_id": run_id,
+            "dataset_id": dataset_id,
+            "status": status,
+            "items_downloaded": len(items),
+        }
+
 
 def actor_item_to_observation(
     item: dict[str, Any],
@@ -154,6 +267,9 @@ def actor_item_to_observation(
     price_value = item.get("price_per_hour_usd", item.get("price_per_hour"))
     if price_value is None:
         raise ValueError("price_per_hour_usd missing")
+    price_available = bool(item.get("price_available", True))
+    if not price_available:
+        price_value = 0
 
     observed_raw = item.get("observed_at")
     observed_at = utc_now()
@@ -185,10 +301,14 @@ def actor_item_to_observation(
         region=region,
         country=item.get("country") or parse_country(region),
         price_per_hour=money(price_value),
+        price_available=price_available,
+        pricing_model=item.get("pricing_model") or "fixed",
         currency=str(item.get("currency") or "USD"),
         billing_scope=item.get("billing_scope") or "per_instance_hour",
         availability_scope=item.get("availability_scope") or "live_inventory",
         executable=False,
+        available_gpu_count=item.get("available_gpu_count"),
+        capacity_scope=item.get("capacity_scope") or "offer",
         reliability=item.get("reliability"),
         source="apify_actor",
         source_url=item.get("source_url"),
@@ -209,7 +329,10 @@ def observation_fingerprint(observation: NormalizedObservation) -> str:
             "gpu_model_normalized": observation.gpu_model_normalized,
             "gpu_count": observation.gpu_count,
             "price_per_hour": str(observation.price_per_hour),
+            "price_available": observation.price_available,
+            "pricing_model": observation.pricing_model,
             "region": observation.region,
             "availability_scope": observation.availability_scope,
+            "available_gpu_count": observation.available_gpu_count,
         }
     )

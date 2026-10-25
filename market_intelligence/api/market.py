@@ -8,8 +8,9 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Query, Response
 
 from market_intelligence import repository
-from market_intelligence.api.deps import DatabaseDep
+from market_intelligence.api.deps import DatabaseDep, SettingsDep
 from market_intelligence.core.analytics import (
+    build_events,
     build_freshness,
     build_history,
     build_offer_page,
@@ -20,6 +21,7 @@ from market_intelligence.core.normalization import ensure_utc, utc_now
 from market_intelligence.errors import ApiError
 from market_intelligence.models import (
     FreshnessReport,
+    MarketEventPage,
     MarketOffer,
     MarketOfferPage,
     MarketSummary,
@@ -51,6 +53,7 @@ async def list_offers(
         Literal["live_inventory", "advertised"] | None, Query()
     ] = None,
     executable: Annotated[bool | None, Query()] = None,
+    include_unpriced: Annotated[bool, Query()] = False,
     freshness: Annotated[str | None, Query()] = None,
     include_stale: Annotated[bool, Query()] = False,
     sort: Annotated[Literal["price", "observed_at", "reliability"], Query()] = "price",
@@ -83,6 +86,7 @@ async def list_offers(
         country=country,
         availability_scope=availability_scope,
         executable=executable,
+        include_unpriced=include_unpriced,
         freshness=freshness_states,
         include_stale=include_stale,
         sort=sort,
@@ -100,6 +104,7 @@ async def list_offers(
                 "provider": provider,
                 "gpu_model": gpu_model,
                 "gpu_match": gpu_match,
+                "include_unpriced": include_unpriced,
                 "freshness": freshness_states,
                 "sort": sort,
             }.items()
@@ -183,16 +188,45 @@ async def get_summary(
 
 
 @router.get("/providers", response_model=list[ProviderRecord])
-async def get_providers(response: Response, db: DatabaseDep) -> list[ProviderRecord]:
+async def get_providers(
+    response: Response, db: DatabaseDep, settings: SettingsDep
+) -> list[ProviderRecord]:
     _no_store(response)
     async with db.connection() as conn:
         rows = await repository.fetch_providers(conn)
-    return build_providers(rows)
+    return build_providers(rows, settings)
 
 
 @router.get("/freshness", response_model=FreshnessReport)
-async def get_freshness(response: Response, db: DatabaseDep) -> FreshnessReport:
+async def get_freshness(
+    response: Response, db: DatabaseDep, settings: SettingsDep
+) -> FreshnessReport:
     _no_store(response)
     async with db.connection() as conn:
         rows = await repository.fetch_freshness(conn)
-    return build_freshness(rows)
+    return build_freshness(rows, settings)
+
+
+@router.get("/events", response_model=MarketEventPage)
+async def get_events(
+    response: Response,
+    db: DatabaseDep,
+    provider: Annotated[str | None, Query()] = None,
+    event_type: Annotated[Literal["new", "updated", "disappeared"] | None, Query()] = None,
+    gpu_model: Annotated[str | None, Query(max_length=80)] = None,
+    since: Annotated[datetime | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> MarketEventPage:
+    _no_store(response)
+    if provider and provider not in PROVIDERS:
+        raise ApiError("provider_not_found", f"unknown provider: {provider}", status_code=404)
+    async with db.connection() as conn:
+        rows = await repository.fetch_events(
+            conn,
+            provider=provider,
+            event_type=event_type,
+            gpu_model=gpu_model,
+            since=ensure_utc(since) if since else None,
+            limit=limit,
+        )
+    return build_events(rows)

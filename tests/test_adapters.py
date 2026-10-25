@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from market_intelligence.config import Settings
+from market_intelligence.providers.akash import AkashAdapter
 from market_intelligence.providers.apify_actor import actor_item_to_observation
 from market_intelligence.providers.lambda_labs import LambdaAdapter
 from market_intelligence.providers.runpod import RunpodAdapter
@@ -96,6 +97,48 @@ def test_runpod_uses_spot_when_on_demand_missing(settings, client) -> None:
     assert offers[0].metadata["price_kind"] == "spot"
 
 
+@pytest.mark.asyncio
+async def test_akash_emits_unpriced_provider_capacity(settings, client, monkeypatch) -> None:
+    adapter = AkashAdapter(settings, client)
+    payload = [
+        {
+            "owner": "akash1abc",
+            "hostUri": "https://provider.example:8443",
+            "isOnline": True,
+            "ipRegion": "Florida",
+            "ipCountryCode": "US",
+            "gpuModels": [
+                {"vendor": "nvidia", "model": "rtx4090", "ram": "24Gi", "interface": "PCIe"},
+                {"vendor": "nvidia", "model": "a100", "ram": "80Gi", "interface": "PCIe"},
+            ],
+            "stats": {"gpu": {"available": 5, "total": 8, "active": 2, "pending": 1}},
+            "attributes": [{"key": "location-region", "value": "na-us-east"}],
+        },
+        {"owner": "akash1offline", "isOnline": False, "stats": {"gpu": {"available": 4}}},
+    ]
+
+    async def fake_get_json(url, **kwargs):
+        assert url.endswith("/providers")
+        return payload
+
+    monkeypatch.setattr(adapter, "_get_json", fake_get_json)
+    outcome = await adapter.fetch(10)
+    assert outcome.complete is True
+    assert outcome.rejected == 0
+    assert len(outcome.items) == 2
+    rtx = next(item for item in outcome.items if item.gpu_model_normalized == "RTX 4090")
+    assert rtx.price_available is False
+    assert rtx.pricing_model == "bid"
+    assert float(rtx.price_per_hour) == 0
+    assert rtx.available_gpu_count == 5
+    assert rtx.capacity_scope == "provider"
+    assert rtx.availability_scope == "advertised"
+    assert rtx.executable is False
+    assert rtx.vram_gb == 24.0
+    assert rtx.country == "US"
+    assert all(item.provider == "akash" for item in outcome.items)
+
+
 def test_lambda_normalizes_and_splits_regions(settings, client) -> None:
     adapter = LambdaAdapter(settings, client)
     wrapper = {
@@ -176,6 +219,140 @@ def test_tensordock_normalizes_hostnode_gpus(settings, client) -> None:
     rtx = by_slug["geforcertx4090-pcie-24gb"]
     assert rtx.gpu_model_normalized == "RTX 4090"
     assert rtx.vram_gb == 24.0
+
+
+@pytest.mark.asyncio
+async def test_vastai_marks_truncated_snapshot_incomplete(settings, client, monkeypatch) -> None:
+    adapter = VastAiAdapter(settings, client)
+    payload = {
+        "offers": [
+            {
+                "id": 54550274,
+                "gpu_name": "GTX 1650",
+                "num_gpus": 1,
+                "dph_total": 0.05,
+                "geolocation": "Oregon, US",
+            }
+        ],
+        "truncated": True,
+    }
+
+    async def fake_get_json(url, **kwargs):
+        assert url.endswith("/bundles/")
+        return payload
+
+    monkeypatch.setattr(adapter, "_get_json", fake_get_json)
+    outcome = await adapter.fetch(1)
+    assert len(outcome.items) == 1
+    assert outcome.complete is False
+    assert outcome.diagnostics["sampled"] is True
+    assert outcome.diagnostics["truncated"] is True
+
+
+@pytest.mark.asyncio
+async def test_vastai_treats_untruncated_public_result_as_sample(settings, client, monkeypatch) -> None:
+    adapter = VastAiAdapter(settings, client)
+    payload = {
+        "offers": [
+            {
+                "id": 54550274,
+                "gpu_name": "GTX 1650",
+                "num_gpus": 1,
+                "dph_total": 0.05,
+                "geolocation": "Oregon, US",
+            }
+        ],
+        "truncated": False,
+    }
+
+    async def fake_get_json(url, **kwargs):
+        return payload
+
+    monkeypatch.setattr(adapter, "_get_json", fake_get_json)
+    outcome = await adapter.fetch(300)
+    assert outcome.complete is False
+    assert outcome.diagnostics["sampled"] is True
+
+
+@pytest.mark.asyncio
+async def test_runpod_marks_limit_truncation_incomplete(settings, client, monkeypatch) -> None:
+    adapter = RunpodAdapter(settings, client)
+    gpu_types = [
+        {
+            "id": f"NVIDIA H100-{index}",
+            "displayName": "H100 SXM",
+            "memoryInGb": 80,
+            "secureCloud": True,
+            "communityCloud": False,
+            "lowestPrice": {"minimumBidPrice": 1.0, "uninterruptablePrice": 2.0},
+        }
+        for index in range(2)
+    ]
+
+    async def fake_post_json(url, *, payload, **kwargs):
+        return {"data": {"gpuTypes": gpu_types}}
+
+    monkeypatch.setattr(adapter, "_post_json", fake_post_json)
+    outcome = await adapter.fetch(1)
+    assert len(outcome.items) == 1
+    assert outcome.complete is False
+    assert outcome.diagnostics["truncated"] is True
+
+
+@pytest.mark.asyncio
+async def test_lambda_marks_limit_truncation_incomplete(client, monkeypatch) -> None:
+    settings = Settings(_env_file=None, lambda_api_key="test-key")
+    adapter = LambdaAdapter(settings, client)
+    data = {
+        f"gpu_1x_h100_{index}": {
+            "instance_type": {
+                "name": f"gpu_1x_h100_{index}",
+                "description": "1x NVIDIA H100 SXM5 80GB",
+                "price_cents_per_hour": 249,
+                "specs": {"gpus": 1},
+                "regions_with_capacity_available": [],
+            }
+        }
+        for index in range(2)
+    }
+
+    async def fake_get_json(url, **kwargs):
+        assert url.endswith("/instance-types")
+        return {"data": data}
+
+    monkeypatch.setattr(adapter, "_get_json", fake_get_json)
+    outcome = await adapter.fetch(1)
+    assert len(outcome.items) == 1
+    assert outcome.complete is False
+    assert outcome.diagnostics["truncated"] is True
+
+
+@pytest.mark.asyncio
+async def test_tensordock_marks_limit_truncation_incomplete(client, monkeypatch) -> None:
+    settings = Settings(_env_file=None, tensordock_api_key="test-key")
+    adapter = TensorDockAdapter(settings, client)
+    hostnodes = [
+        {
+            "id": "hostnode-uuid",
+            "available_resources": {
+                "gpus": [
+                    {"v0Name": "h100-sxm5-80gb", "availableCount": 8, "price_per_hr": 2.2},
+                    {"v0Name": "geforcertx4090-pcie-24gb", "availableCount": 4, "price_per_hr": 0.5},
+                ]
+            },
+            "location": {"city": "Austin", "country": "United States"},
+        }
+    ]
+
+    async def fake_get_json(url, **kwargs):
+        assert url.endswith("/hostnodes")
+        return {"data": {"hostnodes": hostnodes}}
+
+    monkeypatch.setattr(adapter, "_get_json", fake_get_json)
+    outcome = await adapter.fetch(1)
+    assert len(outcome.items) == 1
+    assert outcome.complete is False
+    assert outcome.diagnostics["truncated"] is True
 
 
 def test_actor_item_mapping_forces_apify_trust_tier() -> None:

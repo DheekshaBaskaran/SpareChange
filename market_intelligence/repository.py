@@ -29,6 +29,40 @@ class InsertStats:
     inserted: int = 0
     duplicate: int = 0
     rejected: int = 0
+    state_skipped: int = 0
+
+
+_state_table_supported = False
+
+
+async def market_offer_state_available(conn: AsyncConnection) -> bool:
+    """Report whether migration 005 has been applied for the current role.
+
+    ``market_offer_state`` is created by an owner connection, and the runtime
+    role cannot create it. Collection must keep working before that migration
+    runs, so a missing table skips the current-offer upsert (reads fall back to
+    the legacy view) instead of failing the ingestion transaction.
+    """
+    global _state_table_supported
+    if _state_table_supported:
+        return True
+    cursor = await conn.execute(
+        "SELECT to_regclass('public.market_offer_state') IS NOT NULL AS present"
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        present = False
+    elif isinstance(row, dict):
+        present = bool(row.get("present"))
+    else:
+        present = bool(row[0])
+    _state_table_supported = present
+    if not present:
+        logger.warning(
+            "market_offer_state is missing; skipping current-offer upserts. "
+            "Apply migrations/market_intelligence/005_market_offer_state.sql as the owner role."
+        )
+    return present
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -45,8 +79,11 @@ def observation_fingerprint(observation: NormalizedObservation) -> str:
             "gpu_model_normalized": observation.gpu_model_normalized,
             "gpu_count": observation.gpu_count,
             "price_per_hour": str(observation.price_per_hour),
+            "price_available": observation.price_available,
+            "pricing_model": observation.pricing_model,
             "region": observation.region,
             "availability_scope": observation.availability_scope,
+            "available_gpu_count": observation.available_gpu_count,
         }
     )
 
@@ -141,6 +178,66 @@ async def finish_run(
     )
 
 
+_STATE_UPSERT = """
+    INSERT INTO market_offer_state (
+        id, provider, provider_offer_id, gpu_model, gpu_model_normalized,
+        gpu_count, vram_gb, cpu_cores, ram_gb, disk_gb, region, country,
+        price_per_hour, price_available, pricing_model, currency,
+        billing_scope, availability_scope, executable,
+        available_gpu_count, capacity_scope, reliability,
+        source, source_url, source_record_id, trust_tier, content_hash,
+        raw_payload, metadata, observed_at, run_id
+    ) VALUES (
+        %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s,
+        %s, %s, %s, %s
+    )
+    ON CONFLICT (provider, provider_offer_id) DO UPDATE SET
+        id = EXCLUDED.id,
+        gpu_model = EXCLUDED.gpu_model,
+        gpu_model_normalized = EXCLUDED.gpu_model_normalized,
+        gpu_count = EXCLUDED.gpu_count,
+        vram_gb = EXCLUDED.vram_gb,
+        cpu_cores = EXCLUDED.cpu_cores,
+        ram_gb = EXCLUDED.ram_gb,
+        disk_gb = EXCLUDED.disk_gb,
+        region = EXCLUDED.region,
+        country = EXCLUDED.country,
+        price_per_hour = EXCLUDED.price_per_hour,
+        price_available = EXCLUDED.price_available,
+        pricing_model = EXCLUDED.pricing_model,
+        currency = EXCLUDED.currency,
+        billing_scope = EXCLUDED.billing_scope,
+        availability_scope = EXCLUDED.availability_scope,
+        executable = EXCLUDED.executable,
+        available_gpu_count = EXCLUDED.available_gpu_count,
+        capacity_scope = EXCLUDED.capacity_scope,
+        reliability = EXCLUDED.reliability,
+        source = EXCLUDED.source,
+        source_url = EXCLUDED.source_url,
+        source_record_id = EXCLUDED.source_record_id,
+        trust_tier = EXCLUDED.trust_tier,
+        content_hash = EXCLUDED.content_hash,
+        raw_payload = EXCLUDED.raw_payload,
+        metadata = EXCLUDED.metadata,
+        observed_at = EXCLUDED.observed_at,
+        ingested_at = EXCLUDED.ingested_at,
+        run_id = EXCLUDED.run_id
+    WHERE (
+        EXCLUDED.observed_at,
+        (EXCLUDED.trust_tier = 'provider_api'),
+        EXCLUDED.ingested_at
+    ) > (
+        market_offer_state.observed_at,
+        (market_offer_state.trust_tier = 'provider_api'),
+        market_offer_state.ingested_at
+    )
+"""
+
+
 async def insert_observations(
     conn: AsyncConnection,
     *,
@@ -149,115 +246,164 @@ async def insert_observations(
     bucket_seconds: int = 300,
     reobserve_seconds: int = 300,
 ) -> InsertStats:
-    """Append observations with per-offer, per-bucket deduplication.
+    """Append observations and maintain the one-row-per-offer read model.
 
-    The dedupe ledger is a regular table with a unique key. A content hash
-    suppresses an unchanged republish inside the re-observation window. A
-    savepoint per record means one malformed row cannot roll back the batch.
+    The whole batch shares one transaction; each record uses a savepoint so a
+    malformed row cannot roll back the rest. Current-offer state is upserted in
+    one executemany call after the records are accepted, keeping reads O(offers)
+    instead of O(observations).
     """
     stats = InsertStats()
-    for observation in observations:
-        bucket = observation_bucket(observation.observed_at, bucket_seconds)
-        observation_id = uuid4()
-        fingerprint = observation_fingerprint(observation)
-        try:
-            async with conn.transaction():
-                if reobserve_seconds > 0:
-                    unchanged = await conn.execute(
+    state_rows: list[tuple[Any, ...]] = []
+    async with conn.transaction():
+        for observation in observations:
+            bucket = observation_bucket(observation.observed_at, bucket_seconds)
+            observation_id = uuid4()
+            fingerprint = observation_fingerprint(observation)
+            try:
+                async with conn.transaction():
+                    if reobserve_seconds > 0:
+                        unchanged = await conn.execute(
+                            """
+                            SELECT 1
+                            FROM market_observation_keys
+                            WHERE provider = %s
+                              AND provider_offer_id = %s
+                              AND content_hash = %s
+                              AND bucket_start > %s
+                            LIMIT 1
+                            """,
+                            (
+                                observation.provider,
+                                observation.provider_offer_id,
+                                fingerprint,
+                                bucket - timedelta(seconds=reobserve_seconds),
+                            ),
+                        )
+                        if await unchanged.fetchone() is not None:
+                            stats.duplicate += 1
+                            continue
+                    cursor = await conn.execute(
                         """
-                        SELECT 1
-                        FROM market_observation_keys
-                        WHERE provider = %s
-                          AND provider_offer_id = %s
-                          AND content_hash = %s
-                          AND bucket_start > %s
-                        LIMIT 1
+                        INSERT INTO market_observation_keys
+                            (provider, provider_offer_id, bucket_start, observation_id, content_hash, run_id)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (provider, provider_offer_id, bucket_start) DO NOTHING
                         """,
                         (
                             observation.provider,
                             observation.provider_offer_id,
+                            bucket,
+                            observation_id,
                             fingerprint,
-                            bucket - timedelta(seconds=reobserve_seconds),
+                            run_id,
                         ),
                     )
-                    if await unchanged.fetchone() is not None:
+                    if cursor.rowcount == 0:
                         stats.duplicate += 1
                         continue
-                cursor = await conn.execute(
-                    """
-                    INSERT INTO market_observation_keys
-                        (provider, provider_offer_id, bucket_start, observation_id, content_hash, run_id)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (provider, provider_offer_id, bucket_start) DO NOTHING
-                    """,
-                    (
-                        observation.provider,
-                        observation.provider_offer_id,
-                        bucket,
-                        observation_id,
-                        fingerprint,
-                        run_id,
-                    ),
-                )
-                if cursor.rowcount == 0:
-                    stats.duplicate += 1
-                    continue
-                await conn.execute(
-                    """
-                    INSERT INTO market_observations (
-                        id, provider, provider_offer_id, gpu_model, gpu_model_normalized,
-                        gpu_count, vram_gb, cpu_cores, ram_gb, disk_gb, region, country,
-                        price_per_hour, currency, billing_scope, availability_scope,
-                        executable, reliability, source, source_url, source_record_id,
-                        trust_tier, content_hash, raw_payload, metadata, observed_at,
-                        ingested_at, run_id
-                    ) VALUES (
-                        %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s,
-                        now(), %s
+                    await conn.execute(
+                        """
+                        INSERT INTO market_observations (
+                            id, provider, provider_offer_id, gpu_model, gpu_model_normalized,
+                            gpu_count, vram_gb, cpu_cores, ram_gb, disk_gb, region, country,
+                            price_per_hour, price_available, pricing_model, currency,
+                            billing_scope, availability_scope, executable,
+                            available_gpu_count, capacity_scope, reliability,
+                            source, source_url, source_record_id, trust_tier, content_hash,
+                            raw_payload, metadata, observed_at, ingested_at, run_id
+                        ) VALUES (
+                            %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s,
+                            %s, %s, %s, now(), %s
+                        )
+                        """,
+                        (
+                            observation_id,
+                            observation.provider,
+                            observation.provider_offer_id,
+                            observation.gpu_model,
+                            observation.gpu_model_normalized,
+                            observation.gpu_count,
+                            observation.vram_gb,
+                            observation.cpu_cores,
+                            observation.ram_gb,
+                            observation.disk_gb,
+                            observation.region,
+                            observation.country,
+                            observation.price_per_hour,
+                            observation.price_available,
+                            observation.pricing_model,
+                            observation.currency,
+                            observation.billing_scope,
+                            observation.availability_scope,
+                            observation.executable,
+                            observation.available_gpu_count,
+                            observation.capacity_scope,
+                            observation.reliability,
+                            observation.source,
+                            observation.source_url,
+                            observation.source_record_id,
+                            observation.trust_tier,
+                            fingerprint,
+                            Jsonb(observation.raw_payload),
+                            Jsonb(observation.metadata),
+                            observation.observed_at,
+                            run_id,
+                        ),
                     )
-                    """,
-                    (
-                        observation_id,
-                        observation.provider,
-                        observation.provider_offer_id,
-                        observation.gpu_model,
-                        observation.gpu_model_normalized,
-                        observation.gpu_count,
-                        observation.vram_gb,
-                        observation.cpu_cores,
-                        observation.ram_gb,
-                        observation.disk_gb,
-                        observation.region,
-                        observation.country,
-                        observation.price_per_hour,
-                        observation.currency,
-                        observation.billing_scope,
-                        observation.availability_scope,
-                        observation.executable,
-                        observation.reliability,
-                        observation.source,
-                        observation.source_url,
-                        observation.source_record_id,
-                        observation.trust_tier,
-                        fingerprint,
-                        Jsonb(observation.raw_payload),
-                        Jsonb(observation.metadata),
-                        observation.observed_at,
-                        run_id,
-                    ),
+                    stats.inserted += 1
+                    state_rows.append(
+                        (
+                            observation_id,
+                            observation.provider,
+                            observation.provider_offer_id,
+                            observation.gpu_model,
+                            observation.gpu_model_normalized,
+                            observation.gpu_count,
+                            observation.vram_gb,
+                            observation.cpu_cores,
+                            observation.ram_gb,
+                            observation.disk_gb,
+                            observation.region,
+                            observation.country,
+                            observation.price_per_hour,
+                            observation.price_available,
+                            observation.pricing_model,
+                            observation.currency,
+                            observation.billing_scope,
+                            observation.availability_scope,
+                            observation.executable,
+                            observation.available_gpu_count,
+                            observation.capacity_scope,
+                            observation.reliability,
+                            observation.source,
+                            observation.source_url,
+                            observation.source_record_id,
+                            observation.trust_tier,
+                            fingerprint,
+                            Jsonb(observation.raw_payload),
+                            Jsonb(observation.metadata),
+                            observation.observed_at,
+                            run_id,
+                        )
+                    )
+            except Exception:
+                stats.rejected += 1
+                logger.exception(
+                    "failed to insert observation provider=%s offer=%s",
+                    observation.provider,
+                    observation.provider_offer_id,
                 )
-                stats.inserted += 1
-        except Exception:
-            stats.rejected += 1
-            logger.exception(
-                "failed to insert observation provider=%s offer=%s",
-                observation.provider,
-                observation.provider_offer_id,
-            )
+        if state_rows:
+            if await market_offer_state_available(conn):
+                async with conn.cursor() as cursor:
+                    await cursor.executemany(_STATE_UPSERT, state_rows)
+            else:
+                stats.state_skipped += len(state_rows)
     return stats
 
 
@@ -342,6 +488,10 @@ _OFFER_COLUMNS = """
     billing_scope,
     availability_scope,
     executable,
+    price_available,
+    pricing_model,
+    available_gpu_count,
+    capacity_scope,
     source,
     source_url,
     source_record_id,
@@ -367,6 +517,7 @@ class OfferFilters:
     country: str | None = None
     availability_scope: str | None = None
     executable: bool | None = None
+    include_unpriced: bool = False
     freshness: list[str] | None = None
     include_stale: bool = False
     sort: str = "price"
@@ -435,10 +586,15 @@ async def fetch_offers(
     if filters.executable is not None:
         where.append("executable = %s")
         params.append(filters.executable)
+    if not filters.include_unpriced:
+        where.append("price_available = true")
 
     if filters.sort == "price":
-        order = "price_per_gpu_hour_micros ASC, provider ASC, provider_offer_id ASC"
-        comparison = "(price_per_gpu_hour_micros, provider, provider_offer_id) > (%s, %s, %s)"
+        order = "(NOT price_available) ASC, price_per_gpu_hour_micros ASC, provider ASC, provider_offer_id ASC"
+        comparison = (
+            "((NOT price_available), price_per_gpu_hour_micros, provider, provider_offer_id) "
+            "> (%s, %s, %s, %s)"
+        )
     elif filters.sort == "observed_at":
         order = "observed_at DESC, provider DESC, provider_offer_id DESC"
         comparison = "(observed_at, provider, provider_offer_id) < (%s::timestamptz, %s, %s)"
@@ -452,19 +608,21 @@ async def fetch_offers(
 
     if filters.cursor:
         values = decode_cursor(filters.cursor, filters.sort)
-        if len(values) != 3:
+        expected = 4 if filters.sort == "price" else 3
+        if len(values) != expected:
             from market_intelligence.errors import ApiError
 
             raise ApiError("invalid_cursor", "cursor is malformed", status_code=400)
-        if filters.sort == "observed_at":
+        if filters.sort == "price":
+            values[0] = bool(values[0])
+            values[1] = int(values[1])
+        elif filters.sort == "observed_at":
             try:
                 values[0] = datetime.fromisoformat(str(values[0]).replace("Z", "+00:00"))
             except ValueError as exc:
                 from market_intelligence.errors import ApiError
 
                 raise ApiError("invalid_cursor", "cursor timestamp is malformed", status_code=400) from exc
-        elif filters.sort == "price":
-            values[0] = int(values[0])
         else:
             values[0] = float(values[0])
         where.append(comparison)
@@ -486,7 +644,12 @@ async def fetch_offers(
         rows = rows[: filters.limit]
         last = rows[-1]
         if filters.sort == "price":
-            values = [last["price_per_gpu_hour_micros"], last["provider"], last["provider_offer_id"]]
+            values = [
+                not last["price_available"],
+                last["price_per_gpu_hour_micros"],
+                last["provider"],
+                last["provider_offer_id"],
+            ]
         elif filters.sort == "observed_at":
             values = [
                 _as_utc(last["observed_at"]).isoformat().replace("+00:00", "Z"),
@@ -554,6 +717,7 @@ async def fetch_history(
           AND observed_at < %s
           AND currency = %s
           AND executable = false
+          AND price_available = true
           AND (%s::text IS NULL OR provider = %s)
         GROUP BY 1
         ORDER BY 1
@@ -577,7 +741,9 @@ async def fetch_summary(
             count(*)::int AS total,
             count(*) FILTER (WHERE freshness = 'fresh')::int AS fresh,
             count(DISTINCT provider)::int AS providers,
-            count(*) FILTER (WHERE executable)::int AS executable
+            count(*) FILTER (WHERE executable)::int AS executable,
+            count(*) FILTER (WHERE price_available)::int AS priced,
+            count(*) FILTER (WHERE NOT price_available)::int AS unpriced
         FROM market_offers_current
         WHERE (%s::text IS NULL OR provider = %s)
         """,
@@ -585,13 +751,21 @@ async def fetch_summary(
     )
     totals = await cursor.fetchone()
     if totals is None:
-        totals = {"total": 0, "fresh": 0, "providers": 0, "executable": 0}
+        totals = {
+            "total": 0,
+            "fresh": 0,
+            "providers": 0,
+            "executable": 0,
+            "priced": 0,
+            "unpriced": 0,
+        }
 
     cursor = await conn.execute(
         """
         WITH current AS (
             SELECT * FROM market_offers_current
             WHERE freshness IN ('fresh', 'stale')
+              AND price_available = true
               AND (%s::text IS NULL OR provider = %s)
         ),
         windowed AS (
@@ -649,6 +823,109 @@ async def fetch_providers(conn: AsyncConnection) -> list[dict[str, Any]]:
         LEFT JOIN provider_health h ON h.provider = s.provider
         ORDER BY s.provider
         """
+    )
+    return list(await cursor.fetchall())
+
+
+async def insert_market_events(
+    conn: AsyncConnection, events: list[dict[str, Any]], *, actor_run_id: str | None = None
+) -> InsertStats:
+    """Insert Actor events idempotently.
+
+    Each event uses a deterministic event_id. A retry or a webhook replay
+    therefore reports duplicates rather than appending a second event.
+    """
+    stats = InsertStats()
+    for event in events:
+        cursor = await conn.execute(
+            """
+            INSERT INTO market_events (
+                event_id, event_type, provider, provider_offer_id, gpu_model,
+                gpu_model_normalized, price_available, previous_price_per_hour,
+                current_price_per_hour, price_change_percent,
+                previous_available_gpu_count, current_available_gpu_count,
+                availability_change, reason, observed_at, actor_run_id,
+                source, metadata
+            ) VALUES (
+                %s, %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s,
+                %s, %s,
+                %s, %s, %s, %s,
+                %s, %s
+            )
+            ON CONFLICT (event_id) DO NOTHING
+            """,
+            (
+                event["event_id"],
+                event["event_type"],
+                event["provider"],
+                event["provider_offer_id"],
+                event["gpu_model"],
+                event["gpu_model_normalized"],
+                event["price_available"],
+                event.get("previous_price_per_hour_usd"),
+                event.get("current_price_per_hour_usd"),
+                event.get("price_change_percent"),
+                event.get("previous_available_gpu_count"),
+                event.get("current_available_gpu_count"),
+                event.get("availability_change"),
+                event["reason"],
+                event["observed_at"],
+                actor_run_id or event.get("actor_run_id"),
+                event.get("source") or "apify_actor",
+                Jsonb(event.get("metadata") or {}),
+            ),
+        )
+        if cursor.rowcount:
+            stats.inserted += 1
+        else:
+            stats.duplicate += 1
+    return stats
+
+
+async def fetch_events(
+    conn: AsyncConnection,
+    *,
+    provider: str | None = None,
+    event_type: str | None = None,
+    gpu_model: str | None = None,
+    since: datetime | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    where = ["1 = 1"]
+    params: list[Any] = []
+    if provider:
+        where.append("provider = %s")
+        params.append(provider)
+    if event_type:
+        where.append("event_type = %s")
+        params.append(event_type)
+    if gpu_model:
+        where.append("lower(gpu_model_normalized) = lower(%s)")
+        params.append(gpu_model)
+    if since:
+        where.append("observed_at >= %s")
+        params.append(since)
+    params.append(limit)
+    cursor = await conn.execute(
+        f"""
+        SELECT
+            event_id, event_type, provider, provider_offer_id, gpu_model,
+            gpu_model_normalized, price_available,
+            ROUND(previous_price_per_hour * 1000000)::bigint
+                AS previous_price_per_hour_micros,
+            ROUND(current_price_per_hour * 1000000)::bigint
+                AS current_price_per_hour_micros,
+            price_change_percent::float8 AS price_change_percent,
+            previous_available_gpu_count, current_available_gpu_count,
+            availability_change, reason, observed_at, actor_run_id, metadata
+        FROM market_events
+        WHERE {' AND '.join(where)}
+        ORDER BY observed_at DESC, event_id ASC
+        LIMIT %s
+        """,
+        params,
     )
     return list(await cursor.fetchall())
 
