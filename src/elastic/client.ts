@@ -122,6 +122,26 @@ export class ElasticHttpClient implements ElasticsearchPort, AgentBuilderPort {
     return this.bulk(ids.map((id) => ({ action: "delete" as const, id })));
   }
 
+  /**
+   * Removes every document from the projection index while keeping the index,
+   * its mappings, and the Agent Builder tools intact. Used after a demo reset,
+   * where rows are truncated outside the application and therefore never emit
+   * deletion tombstones.
+   */
+  async deleteAllDocuments(): Promise<number> {
+    const raw = (await requestJson(
+      this.searchUrl(),
+      `/${encodeURIComponent(this.config.indexName)}/_delete_by_query`,
+      {
+        method: "POST",
+        apiKey: this.searchKey(),
+        timeoutMs: this.config.investigationTimeoutMs,
+        body: { query: { match_all: {} } },
+      },
+    )) as { deleted?: number };
+    return typeof raw?.deleted === "number" ? raw.deleted : 0;
+  }
+
   async getDocuments(ids: string[]): Promise<Map<string, FinancialDocument>> {
     const result = new Map<string, FinancialDocument>();
     const unique = [...new Set(ids.filter(Boolean))];

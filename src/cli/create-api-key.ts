@@ -1,11 +1,21 @@
-import { generateApiKey, upsertApiKey } from "../src/auth/keys.js";
-import { PgDb } from "../src/db/client.js";
-import type { PrincipalRole } from "../src/contract.js";
+import { generateApiKey, upsertApiKey } from "../auth/keys.js";
+import { PgDb } from "../db/client.js";
+import type { PrincipalRole } from "../contract.js";
+
+/**
+ * Provision a credential without shipping dev dependencies into the runtime
+ * image. The key is printed exactly once; only its hash is persisted.
+ *
+ *   node dist/cli/create-api-key.js --name "CREAO Deal Coordinator" --role agent
+ *   node dist/cli/create-api-key.js --name "Duo 2 Worker" --role worker
+ *   node dist/cli/create-api-key.js --name "Acme Approver" --role human \
+ *     --party-id <party-uuid> --human-user-id <human-uuid>
+ */
 
 try {
   process.loadEnvFile(".env");
 } catch {
-  // Optional.
+  // .env is optional; containers receive variables directly.
 }
 
 function value(flag: string): string | null {
@@ -14,6 +24,8 @@ function value(flag: string): string | null {
   return process.argv[index + 1]?.trim() || null;
 }
 
+const ROLES: PrincipalRole[] = ["agent", "human", "finance", "admin", "worker"];
+
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL?.trim();
   if (!databaseUrl) throw new Error("DATABASE_URL is required.");
@@ -21,8 +33,8 @@ async function main(): Promise<void> {
   const name = value("--name");
   if (!name) throw new Error("--name is required.");
   const role = (value("--role") ?? "agent") as PrincipalRole;
-  if (!["agent", "human", "finance", "admin", "worker"].includes(role)) {
-    throw new Error("--role must be one of agent, human, finance, admin, worker.");
+  if (!ROLES.includes(role)) {
+    throw new Error(`--role must be one of ${ROLES.join(", ")}.`);
   }
   const partyId = value("--party-id");
   const humanUserId = value("--human-user-id");

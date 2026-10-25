@@ -1,4 +1,5 @@
 services:
+  # Market Intelligence (Duo 2) — stateless FastAPI container.
   api:
     build:
       context: ../..
@@ -24,14 +25,47 @@ services:
         max-size: "20m"
         max-file: "5"
 
+  # Duo 1 — Relay finance / CREAO API.
+  duo1:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.duo1
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # Inside the Compose network the market API is reachable by service name.
+      MARKET_API_URL: http://api:8000
+    expose:
+      - "4000"
+    # Deliberately independent of api: a market outage must not block finance.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4000/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
   caddy:
     image: caddy:2
     restart: unless-stopped
     depends_on:
       api:
         condition: service_healthy
+      duo1:
+        condition: service_healthy
     environment:
       MARKET_DOMAIN: ${MARKET_DOMAIN:?set MARKET_DOMAIN in .env}
+      DUO1_DOMAIN: ${DUO1_DOMAIN:?set DUO1_DOMAIN in .env}
     ports:
       - "80:80"
       - "443:443"

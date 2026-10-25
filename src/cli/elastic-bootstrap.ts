@@ -1,5 +1,5 @@
-import { loadElasticConfig } from "../src/config.js";
-import { bootstrapElastic } from "../src/elastic/bootstrap.js";
+import { loadElasticConfig } from "../config.js";
+import { bootstrapElastic } from "../elastic/bootstrap.js";
 
 try {
   process.loadEnvFile(".env");

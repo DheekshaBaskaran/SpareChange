@@ -5,6 +5,7 @@ import { appendAudit } from "../db/audit.js";
 import { asArray, iso } from "../db/values.js";
 import { ApiError } from "../errors.js";
 import { getException, type FinancialExceptionView } from "../finance/exceptions.js";
+import { ElasticHttpError } from "./http.js";
 import type { ElasticSyncService } from "./sync.js";
 import {
   buildInvestigationPrompt,
@@ -536,13 +537,30 @@ export class ElasticFinanceIntegration implements ElasticInvestigationService {
       response = await this.agent.converse({ agentId: this.config.agentId, prompt });
     } catch (error) {
       this.onError(error);
+      // Agent Builder relays the model provider's quota as a 429 after its own
+      // retries. Report that distinctly so operators raise the Elastic trial
+      // limit instead of debugging a phantom outage.
+      const rateLimited = error instanceof ElasticHttpError && error.status === 429;
+      const errorCode = rateLimited
+        ? "agent_builder_rate_limited"
+        : error instanceof ElasticHttpError && error.status === 401
+          ? "agent_builder_unauthorized"
+          : "agent_builder_unavailable";
       await failRunning(this.db, {
         investigationId,
-        errorCode: "agent_builder_unavailable",
+        errorCode,
         errorMessage: error instanceof Error ? error.message : String(error),
         actorId,
         idempotencyKey: request.idempotencyKey,
       }).catch((cause: unknown) => this.onError(cause));
+      if (rateLimited) {
+        throw new ApiError(
+          503,
+          "elastic_rate_limited",
+          "Elastic Agent Builder reached its model rate or trial limit; the financial exception remains open and unchanged. Retry after the provider quota refills.",
+          { retryable: true },
+        );
+      }
       throw new ApiError(
         503,
         "elastic_investigation_failed",

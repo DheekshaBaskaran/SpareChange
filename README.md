@@ -23,8 +23,11 @@ cp .env.example .env
 npm run db:migrate           # core + finance + P1-P5 + provider payouts + runtime grants
 npm run db:migrate:timescale # optional: Timescale hypertable on Tiger Data
 npm run db:seed              # demo parties, offers, allocation, fixture deal
+npm run db:reset-demo -- --confirm --purge-elastic  # clear demo transactions, re-seed, rebuild the index
 npm run dev                  # http://localhost:4000
 ```
+
+`db:reset-demo` truncates only the transactional `relay` tables (deals, contracts, invoices, payments, exceptions, investigations) and keeps parties, API keys, ledger accounts, spending limits, and the mirrored market offers. It refuses to run without `--confirm` and never runs against a production target. `db:seed` alone is idempotent and also restores the role spending limits that migration 0004 only seeds once. Because truncation bypasses the outbox, `--purge-elastic` clears the Elastic projection index and rebuilds it from the seeded data, so the investigation layer never cites deleted records.
 
 Duo 1 and Market Intelligence can share one Tiger Data database. Duo 1 keeps its tables in the `relay` schema and reads Market Intelligence's `public` tables only through the market API, so `DATABASE_URL` is the same value for both services while `MIGRATION_DATABASE_URL` stays with the owner role. When the Python market API is already listening on `:8099`, set `MARKET_API_URL=http://127.0.0.1:8099` and Duo 1 mirrors fresh public offers for solver baselines (see [docs/MARKET_INTELLIGENCE_INTERFACE.md](docs/MARKET_INTELLIGENCE_INTERFACE.md#8-duo-1-bridge)).
 
@@ -42,6 +45,10 @@ Production:
 npm run build
 npm start
 ```
+
+Container deployment for Duo 1 and Market Intelligence behind Caddy, including
+health checks, migrations, credential bootstrap, and the full startup sequence,
+is documented in [deploy/vultr/README.md](deploy/vultr/README.md).
 
 Tests do not need a live database:
 

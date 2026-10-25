@@ -321,6 +321,38 @@ test("an uneconomic closed cycle is rejected with the aggregate surplus violatio
   );
 });
 
+test("a single-GPU market observation prices a multi-GPU baseline", () => {
+  const target = workload("target", "buyer-t", "Target Buyer");
+  const input: SolverInput = {
+    workload: target,
+    workloads: [target],
+    offers: [
+      offer("offer-executable", "provider-a", "Provider A", 160),
+      // Mirrored providers usually list one card; the deal needs eight.
+      offer("market-observation", "market-reference", "Public Reference", 199, {
+        source: "external_reference",
+        executable: false,
+      }),
+    ],
+    allocations: [],
+  };
+  input.offers[1] = { ...input.offers[1]!, gpuCount: 1, observedAt: at(0) };
+
+  const result = solve(input);
+  const direct = result.proposals.find((proposal) => proposal.strategy === "direct");
+  assert.ok(direct, "a single-GPU observation must still anchor a multi-GPU deal");
+  assert.equal(direct.baseline_cost_minor, 199 * 8 * 10);
+  assert.equal(direct.comparison?.independent.offer_id, "market-observation");
+  assert.match(direct.comparison?.independent.note ?? "", /1x H100 scaled to 8 GPUs/);
+  assert.ok(
+    direct.explanation.some(
+      (line) => line.includes("199 minor/GPU-hour") && line.includes("Public Reference"),
+    ),
+  );
+  assert.equal(result.recommended?.strategy, "direct");
+  assert.equal(result.rejected.length, 0);
+});
+
 test("a cycle is not fabricated when the target has no anchor allocation", () => {
   const result = solve(baseInput());
   assert.ok(!result.proposals.some((proposal) => proposal.conditional_chain?.kind === "cycle"));

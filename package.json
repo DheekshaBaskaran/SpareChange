@@ -16,9 +16,11 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:migrate:timescale": "tsx src/db/migrate.ts --timescale",
     "db:seed": "tsx src/db/seed.ts",
-    "key:create": "tsx scripts/create-api-key.ts",
-    "elastic:bootstrap": "tsx scripts/elastic-bootstrap.ts",
-    "elastic:reindex": "tsx scripts/elastic-reindex.ts"
+    "db:reset-demo": "tsx src/cli/reset-demo.ts",
+    "key:create": "tsx src/cli/create-api-key.ts",
+    "elastic:bootstrap": "tsx src/cli/elastic-bootstrap.ts",
+    "elastic:reindex": "tsx src/cli/elastic-reindex.ts",
+    "smoke": "tsx scripts/smoke-duo1.ts"
   },
   "dependencies": {
     "fastify": "^5.0.0",

@@ -36,6 +36,8 @@ export interface SolverOffer {
   location: string | null;
   availableFrom: string | null;
   availableUntil: string | null;
+  // When the price was observed on the public market; null for owned capacity.
+  observedAt?: string | null;
   expiresAt: string | null;
   executable: boolean;
   authorizationStatus: "authorized" | "missing" | "revoked" | "expired";
@@ -394,22 +396,63 @@ function price(
   return roundMinor(rateFor(offer, transfer) * workload.gpuCount * hours);
 }
 
+interface PublicBaseline {
+  offer: SolverOffer;
+  unitRateMinorPerGpuHour: number;
+  requestedGpuCount: number;
+  amountMinor: number;
+  hours: number;
+}
+
+/**
+ * Mirror providers publish a per-GPU-hour unit price for whatever inventory they
+ * happen to list, usually a single card. A buyer that needs eight GPUs cannot
+ * wait for an eight-card public listing before it can price a deal, so the
+ * baseline is the cheapest observed unit rate scaled to the requested count.
+ * The observation stays a reference price, never executable inventory.
+ */
 function cheapestPublicBaseline(
   workload: SolverWorkload,
   offers: SolverOffer[],
-): { offer: SolverOffer; amountMinor: number; hours: number } | null {
+): PublicBaseline | null {
   const hours = durationHours(workload);
   const candidates = offers
     .filter(
       (offer) =>
         offer.source === "external_reference" &&
         offer.gpuModel === workload.gpuModel &&
-        offer.gpuCount >= workload.gpuCount,
+        offer.gpuCount > 0,
     )
-    .sort((a, b) => a.rateMinorPerGpuHour - b.rateMinorPerGpuHour);
+    .sort(
+      (a, b) =>
+        a.rateMinorPerGpuHour - b.rateMinorPerGpuHour ||
+        Date.parse(b.observedAt ?? "") - Date.parse(a.observedAt ?? "") ||
+        a.id.localeCompare(b.id),
+    );
   const offer = candidates[0];
   if (!offer) return null;
-  return { offer, amountMinor: roundMinor(offer.rateMinorPerGpuHour * workload.gpuCount * hours), hours };
+  return {
+    offer,
+    unitRateMinorPerGpuHour: offer.rateMinorPerGpuHour,
+    requestedGpuCount: workload.gpuCount,
+    amountMinor: roundMinor(offer.rateMinorPerGpuHour * workload.gpuCount * hours),
+    hours,
+  };
+}
+
+/**
+ * Explains where a baseline price came from, including the case where a
+ * single-GPU market observation was scaled up to a multi-GPU workload.
+ */
+function describeBaseline(baseline: PublicBaseline): string {
+  const observed = baseline.offer.observedAt
+    ? ` observed ${baseline.offer.observedAt}`
+    : "";
+  const scale =
+    baseline.offer.gpuCount === baseline.requestedGpuCount
+      ? `${baseline.offer.gpuCount}x ${baseline.offer.gpuModel}`
+      : `${baseline.offer.gpuCount}x ${baseline.offer.gpuModel} scaled to ${baseline.requestedGpuCount} GPUs`;
+  return `Cheapest observed market rate: ${baseline.offer.providerName} at ${baseline.unitRateMinorPerGpuHour} minor/GPU-hour (${scale}${observed}).`;
 }
 
 function budgetFor(workload: SolverWorkload, mandate: SolverMandate): number {
@@ -1134,7 +1177,7 @@ function buildGeneralCandidate(
     kind: kind === "cycle" ? "keep_current" : "independent_rental",
     description: kind === "cycle"
       ? `${target.buyerName} keeps its current allocation and every displaced workload remains in place.`
-      : `${target.buyerName} uses the public market reference while every displaced workload keeps its current allocation.`,
+      :      `${target.buyerName} uses the public market reference while every displaced workload keeps its current allocation.`,
     buyer_cost_minor: baselineTotal,
     provider_revenue_minor: providerRevenueBaseline,
     source: kind === "cycle" ? "existing_allocation" : "public_market_reference",
@@ -1143,7 +1186,12 @@ function buildGeneralCandidate(
       : cheapestPublicBaseline(target, input.offers)?.offer.id ?? nodes[0]?.offer.id ?? null,
     note: kind === "cycle"
       ? "The comparison is the persisted current allocation; no new capacity is created by the cycle."
-      : "Public reference prices are observations, not confirmed inventory.",
+      : (() => {
+          const baseline = cheapestPublicBaseline(target, input.offers);
+          return baseline
+            ? `${describeBaseline(baseline)} Not confirmed inventory.`
+            : "Public reference prices are observations, not confirmed inventory.";
+        })(),
   };
   const comparisonDirect: ComparisonBaseline = {
     kind: "none",
@@ -1362,7 +1410,7 @@ function buildDirectCandidate(
           provider_revenue_minor: 0,
           source: "public_market_reference",
           offer_id: baseline.offer.id,
-          note: "Public reference prices are observations, not confirmed inventory.",
+          note: `${describeBaseline(baseline)} Not confirmed inventory.`
         },
         direct: {
           kind: "direct_rental",
@@ -1384,7 +1432,7 @@ function buildDirectCandidate(
       ],
       explanation: [
         `${offer.providerName} has ${offer.gpuCount}x ${offer.gpuModel} available at ${offer.rateMinorPerGpuHour} minor/GPU-hour.`,
-        `The public market reference is ${baseline.offer.rateMinorPerGpuHour} minor/GPU-hour, so the direct rental saves ${savings} minor units net of the ${fee} fee.`,
+        `${describeBaseline(baseline)} For ${target.gpuCount}x ${target.gpuModel} over ${baseline.hours} hours that is ${baseline.amountMinor} minor, so the direct rental saves ${savings} minor units net of the ${fee} fee.`,
       ],
     },
   };

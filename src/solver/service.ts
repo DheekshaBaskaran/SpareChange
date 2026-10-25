@@ -110,6 +110,7 @@ async function loadOffers(db: Db, gpuModel: string): Promise<SolverOffer[]> {
       location: row.location,
       availableFrom: iso(row.available_from),
       availableUntil: iso(row.available_until),
+      observedAt: iso(row.observed_at),
       expiresAt: iso(row.expires_at),
       executable: row.executable === true && row.source === "worker",
       authorizationStatus,

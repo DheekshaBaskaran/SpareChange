@@ -508,6 +508,21 @@ export async function seedDemo(db: Db): Promise<void> {
       );
     }
 
+    // Migration 0004 seeds these once, so a demo reset that clears the schema
+    // would silently leave every role with no spending authority. Re-assert the
+    // defaults here: seeding must always produce a runnable demo.
+    await tx.query(
+      `INSERT INTO spending_limits
+         (id, subject_type, subject_id, currency, per_transaction_minor, daily_minor,
+          auto_approve_minor, active)
+       VALUES
+         ('99999999-9999-4999-8999-999999999901', 'role', 'finance', 'USD', 100000, 500000, 0, true),
+         ('99999999-9999-4999-8999-999999999902', 'role', 'admin', 'USD', 250000, 1000000, 0, true),
+         ('99999999-9999-4999-8999-999999999903', 'role', 'agent', 'USD', 0, 0, 0, true),
+         ('99999999-9999-4999-8999-999999999904', 'role', 'worker', 'USD', 0, 0, 0, true)
+       ON CONFLICT (subject_type, subject_id, currency) DO NOTHING`,
+    );
+
     await tx.query(`DELETE FROM market_observations WHERE metadata->>'seed' = 'relay-demo'`);
     const observations = [
       [at(-6), "H100", 205, "apify"],

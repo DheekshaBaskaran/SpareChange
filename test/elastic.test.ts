@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import type { ElasticConfig } from "../src/config.js";
 import { DEMO_IDS } from "../src/db/seed-demo.js";
+import { ElasticHttpError } from "../src/elastic/http.js";
 import { ElasticFinanceIntegration } from "../src/elastic/investigations.js";
 import { ElasticSyncService } from "../src/elastic/sync.js";
 import type {
@@ -36,6 +37,7 @@ class FakeElastic implements ElasticsearchPort, AgentBuilderPort {
   readonly documents = new Map<string, FinancialDocument>();
   message = "";
   failConverse = false;
+  converseError: Error | null = null;
 
   async bulk(actions: BulkAction[]): Promise<BulkResult> {
     const result: BulkResult = { indexed: [], deleted: [], failures: [] };
@@ -69,6 +71,7 @@ class FakeElastic implements ElasticsearchPort, AgentBuilderPort {
   async ping(): Promise<void> {}
 
   async converse(_input: ConverseInput): Promise<ConverseResponse> {
+    if (this.converseError) throw this.converseError;
     if (this.failConverse) throw new Error("Agent Builder unavailable");
     return {
       conversationId: randomUUID(),
@@ -613,4 +616,49 @@ test("unsupported citations become insufficient evidence and leave the exception
   assert.equal(response.json().investigation.findings.length, 0);
   assert.equal(response.json().financial_exception.status, "investigating");
   assert.notEqual(response.json().financial_exception.status, "resolved");
+});
+
+test("a model quota rejection is reported as a rate limit, not an outage", async (t) => {
+  const fake = new FakeElastic();
+  // Agent Builder surfaces the provider quota as a 429 after its own retries.
+  fake.converseError = new ElasticHttpError(429, "agent_builder_rate_limited", "quota exhausted");
+  const context = await createTestContext({
+    elasticFactory: (db) =>
+      new ElasticFinanceIntegration({
+        db,
+        config: elasticConfig,
+        search: fake,
+        agent: fake,
+        sync: new ElasticSyncService(db, elasticConfig, fake),
+      }),
+  });
+  t.after(async () => context.app.close());
+  const exceptionId = await insertException(context.db);
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: `/v1/creao/investigations/${exceptionId}/run`,
+    headers: context.headers(TEST_KEYS.agent, { idempotencyKey: "elastic-run-rate-limited" }),
+    payload: {},
+  });
+  assert.equal(response.statusCode, 503, response.body);
+  assert.equal(response.json().code, "elastic_rate_limited");
+  assert.equal(response.json().retryable, true);
+
+  const exception = await context.app.inject({
+    method: "GET",
+    url: `/v1/finance/exceptions/${exceptionId}`,
+    headers: context.headers(TEST_KEYS.finance),
+  });
+  assert.equal(exception.statusCode, 200, exception.body);
+  const body = exception.json().financial_exception;
+  assert.equal(body.status, "open", "a quota rejection must not alter the finance decision");
+  assert.ok(
+    body.actions.some(
+      (action: { action: string; details?: { error_code?: string } | null }) =>
+        action.action === "elastic_investigation_failed" &&
+        action.details?.error_code === "agent_builder_rate_limited",
+    ),
+    "the audit trail must record the quota rejection distinctly",
+  );
 });
