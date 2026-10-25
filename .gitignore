@@ -7,6 +7,16 @@ out/
 coverage/
 *.tsbuildinfo
 
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
 # Environment and local secrets
 .env
 .env.local
@@ -26,14 +36,21 @@ coverage/
 *.sql.gz
 *.pid
 tmp/
+.tmp/
 .cache/
 .freebuff/
+apify_storage/
+storage/
+apify/gpu-market-intelligence/.tmp-*/
 
 # Logs and test output
 *.log
 logs/
 test-results/
 playwright-report/
+
+# Git worktrees used for branch comparison
+.worktrees/
 
 # Editor and OS noise
 .DS_Store

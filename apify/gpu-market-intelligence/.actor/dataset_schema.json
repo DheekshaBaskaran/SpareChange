@@ -1,0 +1,281 @@
+{
+  "actorSpecification": 1,
+  "title": "Relay GPU market offers",
+  "description": "Normalized public GPU listings. Public prices are reference evidence, not reserved capacity. Akash rows are unpriced capacity with pricing_model=bid.",
+  "fields": {
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "string",
+        "title": "Provider",
+        "description": "Canonical provider key.",
+        "enum": ["vastai", "runpod", "akash"],
+        "example": "vastai"
+      },
+      "provider_offer_id": {
+        "type": "string",
+        "title": "Provider offer ID",
+        "description": "Stable source identifier. Akash IDs combine provider owner and GPU model.",
+        "example": "54550274"
+      },
+      "gpu_model": {
+        "type": "string",
+        "title": "GPU model",
+        "description": "Provider-facing GPU model label.",
+        "example": "NVIDIA GeForce RTX 4090"
+      },
+      "gpu_model_normalized": {
+        "type": "string",
+        "title": "Normalized GPU",
+        "description": "Stable grouping key for cross-provider comparison.",
+        "example": "RTX 4090"
+      },
+      "gpu_count": {
+        "type": "integer",
+        "title": "GPU count",
+        "description": "GPUs included in the offer. Akash capacity rows use 1 as a comparable unit.",
+        "example": 1
+      },
+      "vram_gb": {
+        "type": ["number", "null"],
+        "title": "VRAM GB",
+        "description": "VRAM reported for the offer, in GB.",
+        "example": 24
+      },
+      "cpu_cores": {
+        "type": ["number", "null"],
+        "title": "CPU cores",
+        "description": "CPU cores when reported.",
+        "example": 8
+      },
+      "ram_gb": {
+        "type": ["number", "null"],
+        "title": "RAM GB",
+        "description": "System RAM when reported.",
+        "example": 12
+      },
+      "disk_gb": {
+        "type": ["number", "null"],
+        "title": "Disk GB",
+        "description": "Disk size when reported.",
+        "example": 100
+      },
+      "region": {
+        "type": ["string", "null"],
+        "title": "Region",
+        "description": "Provider region or location label.",
+        "example": "Oregon"
+      },
+      "country": {
+        "type": ["string", "null"],
+        "title": "Country",
+        "description": "ISO-3166 alpha-2 country code when known.",
+        "example": "US"
+      },
+      "price_per_hour_usd": {
+        "type": "string",
+        "title": "USD per hour",
+        "description": "Total offer price for the whole instance, six decimals. For unpriced Akash capacity this is a zero sentinel; check price_available first.",
+        "example": "0.047778"
+      },
+      "price_per_gpu_hour_usd": {
+        "type": "string",
+        "title": "USD per GPU-hour",
+        "description": "Comparable price per GPU. For unpriced capacity this is a zero sentinel; check price_available first.",
+        "example": "0.047778"
+      },
+      "price_available": {
+        "type": "boolean",
+        "title": "Price available",
+        "description": "False for capacity records whose source publishes no price. Never treat these as free offers.",
+        "example": true
+      },
+      "pricing_model": {
+        "type": "string",
+        "title": "Pricing model",
+        "description": "fixed for listed prices, bid for Akash reverse-auction capacity.",
+        "enum": ["fixed", "bid", "unknown"],
+        "example": "fixed"
+      },
+      "currency": {
+        "type": "string",
+        "title": "Currency",
+        "description": "ISO-4217 currency code.",
+        "example": "USD"
+      },
+      "billing_scope": {
+        "type": "string",
+        "title": "Billing scope",
+        "description": "Whether the price covers an instance, a GPU, or an hour.",
+        "enum": ["per_instance_hour", "per_gpu_hour", "per_hour"],
+        "example": "per_instance_hour"
+      },
+      "availability_scope": {
+        "type": "string",
+        "title": "Availability scope",
+        "description": "live_inventory means the source reports rentable inventory; advertised means a published reference price or capacity.",
+        "enum": ["live_inventory", "advertised"],
+        "example": "live_inventory"
+      },
+      "available_gpu_count": {
+        "type": ["integer", "null"],
+        "title": "Available GPUs",
+        "description": "Available GPU count when the source reports it. Akash reports provider-level capacity.",
+        "example": null
+      },
+      "capacity_scope": {
+        "type": "string",
+        "title": "Capacity scope",
+        "description": "offer when the count belongs to this offer, provider when it is provider-total capacity.",
+        "enum": ["offer", "provider"],
+        "example": "offer"
+      },
+      "executable": {
+        "type": "boolean",
+        "title": "Executable",
+        "description": "Always false for public market data. Only authorized Relay inventory is executable.",
+        "example": false
+      },
+      "reliability": {
+        "type": ["number", "null"],
+        "title": "Reliability",
+        "description": "Provider-reported reliability in [0,1], when available.",
+        "example": 0.985
+      },
+      "source": {
+        "type": "string",
+        "title": "Source",
+        "description": "Collection channel.",
+        "example": "vastai_api"
+      },
+      "source_url": {
+        "type": ["string", "null"],
+        "title": "Source URL",
+        "description": "Human-inspectable source URL.",
+        "example": "https://console.vast.ai/api/v0/bundles/"
+      },
+      "source_record_id": {
+        "type": ["string", "null"],
+        "title": "Source record ID",
+        "description": "Provider record identifier.",
+        "example": "54550274"
+      },
+      "trust_tier": {
+        "type": "string",
+        "title": "Trust tier",
+        "description": "apify_actor for records collected by this Actor.",
+        "enum": ["provider_api", "apify_actor", "manual"],
+        "example": "apify_actor"
+      },
+      "observed_at": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Observed at",
+        "description": "UTC timestamp of this collection.",
+        "example": "2026-10-24T23:28:28.307Z"
+      },
+      "raw_payload": {
+        "type": "object",
+        "title": "Raw source payload",
+        "description": "Trimmed source record for provenance when includeRawPayload is enabled."
+      },
+      "metadata": {
+        "type": "object",
+        "title": "Metadata",
+        "description": "Provider-specific, non-contractual details including capacity attribution."
+      }
+    },
+    "required": [
+      "provider",
+      "provider_offer_id",
+      "gpu_model",
+      "gpu_model_normalized",
+      "gpu_count",
+      "price_per_hour_usd",
+      "price_available",
+      "pricing_model",
+      "executable",
+      "source",
+      "observed_at"
+    ]
+  },
+  "views": {
+    "offers": {
+      "title": "Market offers",
+      "description": "All normalized offers, including unpriced Akash capacity.",
+      "transformation": {
+        "fields": [
+          "provider",
+          "gpu_model",
+          "gpu_model_normalized",
+          "gpu_count",
+          "vram_gb",
+          "price_per_hour_usd",
+          "price_per_gpu_hour_usd",
+          "price_available",
+          "pricing_model",
+          "region",
+          "country",
+          "availability_scope",
+          "available_gpu_count",
+          "observed_at",
+          "source_url"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "provider": { "label": "Provider" },
+          "gpu_model": { "label": "GPU" },
+          "gpu_model_normalized": { "label": "Normalized" },
+          "gpu_count": { "label": "Count", "format": "number" },
+          "vram_gb": { "label": "VRAM GB", "format": "number" },
+          "price_per_hour_usd": { "label": "USD/hour" },
+          "price_per_gpu_hour_usd": { "label": "USD/GPU-hour" },
+          "price_available": { "label": "Priced", "format": "boolean" },
+          "pricing_model": { "label": "Pricing" },
+          "region": { "label": "Region" },
+          "country": { "label": "Country" },
+          "availability_scope": { "label": "Scope" },
+          "available_gpu_count": { "label": "Available", "format": "number" },
+          "observed_at": { "label": "Observed", "format": "date" },
+          "source_url": { "label": "Source", "format": "link" }
+        }
+      }
+    },
+    "capacity": {
+      "title": "Akash capacity",
+      "description": "Unpriced bid-based capacity. Never interpret as a free or executable offer.",
+      "transformation": {
+        "fields": [
+          "provider",
+          "gpu_model",
+          "gpu_model_normalized",
+          "vram_gb",
+          "available_gpu_count",
+          "capacity_scope",
+          "region",
+          "country",
+          "pricing_model",
+          "observed_at",
+          "source_url"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "provider": { "label": "Provider" },
+          "gpu_model": { "label": "GPU" },
+          "vram_gb": { "label": "VRAM GB", "format": "number" },
+          "available_gpu_count": { "label": "Provider GPUs", "format": "number" },
+          "capacity_scope": { "label": "Scope" },
+          "region": { "label": "Region" },
+          "country": { "label": "Country" },
+          "pricing_model": { "label": "Pricing" },
+          "observed_at": { "label": "Observed", "format": "date" },
+          "source_url": { "label": "Source", "format": "link" }
+        }
+      }
+    }
+  }
+}

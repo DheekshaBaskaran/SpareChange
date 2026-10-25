@@ -1,0 +1,21 @@
+{
+  "actorSpecification": 1,
+  "name": "relay-gpu-market-intelligence",
+  "title": "Relay GPU Market Intelligence",
+  "description": "Collects real public GPU market data from Vast.ai, RunPod, and Akash Network. Normalizes offers, tracks price and capacity changes across runs, emits new/updated/disappeared events, and can push directly into Relay's Tiger Data-backed API. Akash capacity is unpriced bid-based inventory, not a fixed or executable price.",
+  "version": "1.0",
+  "buildTag": "latest",
+  "meta": {
+    "templateId": "javascript-start"
+  },
+  "minMemoryMbytes": 256,
+  "maxMemoryMbytes": 1024,
+  "input": "./input_schema.json",
+  "output": "./output_schema.json",
+  "storages": {
+    "datasets": {
+      "default": "./dataset_schema.json",
+      "events": "./events_dataset_schema.json"
+    }
+  }
+}
