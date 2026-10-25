@@ -25,14 +25,12 @@ APIs, not rebuilt here.
 
 - **51/51 Duo 1 tests pass** against embedded Postgres (PGlite); Duo 2 typecheck
   and production build are clean.
-- The combined E2E exercises deal approval, compute execution, verified usage,
-  invoicing, human payment authorization, and testnet settlement. The latest
-  Vultr rehearsal (`e2e-mvnzyikz-4ea8a6`) verified the workflow through payment
-  authorization; settlement and provider-payout verification remain follow-up
-  checks while the operator reviews x402 connectivity and transaction status.
-  See the run notes below and
-  [docs/DEMO_SCENARIOS.md](docs/DEMO_SCENARIOS.md) for the recorded results and
-  verification steps.
+- The combined E2E passes on the deployed Vultr stack: deal approval, compute
+  execution, verified usage, invoicing, human payment authorization, a real
+  Base Sepolia x402 settlement, a Solana Devnet provider payout, and a balanced
+  ledger with a clean reconciliation. Transactions were confirmed through their
+  own RPC/explorer. See the run notes below and
+  [docs/DEMO_SCENARIOS.md](docs/DEMO_SCENARIOS.md).
 - The machine-readable Duo 1 contract has **73 operations**; the 14 operations
   used by the existing hosted CREAO Deal Coordinator remain preserved.
 - The reconstructed 14-operation contract probe has run in hosted CREAO
@@ -77,29 +75,31 @@ npm run e2e:multiparty -- http://127.0.0.1:4000 http://127.0.0.1:3402
 
 ## Latest Vultr E2E rehearsal
 
-The Vultr rehearsal (`e2e-mvnzyikz-4ea8a6`, 2026-10-25) verified deal approval,
-local-process compute, usage reporting, invoice generation, reconciliation,
-and human authorization for payment. The demo fixtures were restored before
-the run so the expected GPU capacity was available. Relay retained the run's
-records and reports the payment instruction as `submitted`; the invoice remains
-unpaid pending operator verification of x402 connectivity and the Base Sepolia
-transaction status. The E2E is therefore verified through payment
-authorization, with settlement, provider payout, and final ledger/audit checks
-left to complete.
+Run `e2e-mvnzyikz-4ea8a6` (2026-10-25) completed on the deployed Vultr stack:
+deal search, participant approvals, handoff, local-process compute, verified
+usage, a $128.00 invoice, reconciliation, human payment authorization, a real
+Base Sepolia x402 settlement, a human-approved Solana Devnet provider payout,
+a clean final reconciliation, and a balanced ledger.
 
-Run references:
+| Evidence | Value |
+| --- | --- |
+| Job | `job_7a9a55e3f8` (executor `local-process`) |
+| Contract / invoice | `d1d56fdf-3fd9-41fb-8e22-954507b691db` / `bc97677d-bc98-499e-bb3a-be6dc5386879` ($128.00, paid) |
+| Buyer settlement | Base Sepolia tx [`0x9451d165…c4c86c7`](https://sepolia.basescan.org/tx/0x9451d165eeadb3098c2512947bec1b46805d3fc27210288708d371062c4c86c7) — 0.01 USDC (10,000 units), block 50114021, buyer `0x4878…7eb7` → provider `0x5f6e…6e3d` |
+| Provider payout | Solana Devnet sig [`3xnhaFKi…LYsSWB`](https://explorer.solana.com/tx/3xnhaFKiKUzxYcojxizjgomnyP7Gb88Har3GrhNHtouviiVUStvAsUzh72FMGfYkKRZ4prKtH1rTr6UqUpLYsSWB?cluster=devnet) — 10,000,000 lamports, slot 515026405 |
+| Accounting | final reconciliation 0 exceptions; trial balance balanced at $492.00 debit = $492.00 credit |
+| Audit | 400 events; `payment.settled` names the Base Sepolia tx and `provider_payout.settled` names the Solana signature |
 
-- Job: `job_7a9a55e3f8`
-- Invoice: `bc97677d-bc98-499e-bb3a-be6dc5386879`
-- Payment instruction: `10e7d889-4dd9-4976-bfdd-c8c036eeb923`
+Both transfers were confirmed independently through their own RPC/explorer, not
+taken from the application response.
 
-To finish this rehearsal, first have the operator check Duo 2 and facilitator
-connectivity and verify the buyer/provider wallets' Base Sepolia USDC activity.
-If a transfer has occurred, reconcile its transaction hash to this existing
-instruction; otherwise, once connectivity is healthy, continue with this
-already-approved instruction. Preserve the run's records: do not reset demo
-data, create a new payment instruction, or rerun the E2E. After settlement,
-complete the provider payout and verify the trial balance and audit trail.
+**Deployment note.** The first attempt failed at settlement because
+`APP_BASE_URL` pointed at the public hostname: the container had to hairpin out
+to the host's public IP and back through Caddy, which the cloud firewall drops,
+so the x402 call aborted before any payment was signed. The Vultr Compose file
+now defaults that variable to `http://127.0.0.1:3402`; it is used only for the
+provider paywall self-call, so loopback reaches the same endpoint without the
+hop. Settlement and payout then completed on the first retry.
 
 ## Duo 1 quick start
 

@@ -132,7 +132,27 @@ For each run record:
    `investigation_status` (`503` is the expected degraded Elastic result), and
    `hosted_creao: "not_verified"`. Do not present this as a hosted CREAO run.
 
-Last verified references (2026-10-25):
+Last verified references (2026-10-25, deployed Vultr run of scenario A):
+
+| Field | Value |
+| --- | --- |
+| Run | `e2e-mvnzyikz-4ea8a6` |
+| Job | `job_7a9a55e3f8` (executor `local-process`) |
+| Contract | `d1d56fdf-3fd9-41fb-8e22-954507b691db` |
+| Invoice | `bc97677d-bc98-499e-bb3a-be6dc5386879`, $128.00, paid |
+| Buyer settlement | Base Sepolia `0x9451d165eeadb3098c2512947bec1b46805d3fc27210288708d371062c4c86c7`, block 50114021, 10,000 USDC units |
+| Provider payout | Solana Devnet `3xnhaFKiKUzxYcojxizjgomnyP7Gb88Har3GrhNHtouviiVUStvAsUzh72FMGfYkKRZ4prKtH1rTr6UqUpLYsSWB`, slot 515026405, 10,000,000 lamports |
+| Reconciliation | 0 exceptions |
+| Ledger | balanced, $492.00 debit = $492.00 credit |
+
+Deployment lesson from that run: the first settlement attempt failed because
+`APP_BASE_URL` used the public hostname, forcing the container to hairpin out
+through the host's public IP and back into Caddy, which the cloud firewall
+dropped. The Vultr Compose file defaults it to `http://127.0.0.1:3402`, which
+reaches the same paywall without leaving the container. If settlement ever
+fails with a timeout or `fetch failed` on a deployed host, check that first.
+
+Older local references (2026-10-25):
 
 | Scenario | Evidence |
 | --- | --- |
