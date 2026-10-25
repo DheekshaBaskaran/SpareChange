@@ -1,8 +1,11 @@
 # CREAO integration status
 
-**Verified:** 2026-10-24
-**Branch:** `Makayla`
-**Verdict:** **RELAY-SIDE 14-OPERATION CONTRACT AND ELASTIC INVESTIGATOR VERIFIED LOCALLY / LIVE HOSTED AGENT AND LIVE ELASTIC DEPLOYMENT NOT VERIFIED**
+**Verified:** 2026-10-25 (Relay-side contract test re-run on `integration/duo1-duo2`)
+**Branch:** `integration/duo1-duo2`
+**Verdict:** **RELAY-SIDE 14-OPERATION CONTRACT VERIFIED LOCALLY / LIVE HOSTED AGENT AND LIVE ELASTIC DEPLOYMENT NOT VERIFIED**
+
+The exact CREAO-side configuration and proof sequence is in
+[HOSTED_CREAO_RUNBOOK.md](HOSTED_CREAO_RUNBOOK.md).
 
 The Relay backend preserves the 14 operations used by the existing hosted CREAO Deal Coordinator. The agent specification is [CREAO_AGENT_HANDOFF.md](CREAO_AGENT_HANDOFF.md); the agent itself is **not rebuilt** here. There is still no evidence in this workspace that the hosted agent has called a deployed Relay instance, and no public host, CREAO secret, runtime package, or probe output has been provided.
 
@@ -73,9 +76,11 @@ Do not mark the integration verified from a mock run, a reference-server run, a 
 
 ## What to do next
 
-1. Have the partner provide the Tiger Data URL and apply `npm run db:migrate` / `db:migrate:timescale` (or confirm who runs it).
+1. Confirm the Tiger Data URL and apply migrations through `0008` (see
+   [../deploy/vultr/README.md](../deploy/vultr/README.md)).
 2. Deploy the backend to the shared public HTTPS host.
-3. Set the CREAO secrets and run the preserved read-only probe.
+3. Set the CREAO secrets and run the preserved read-only probe
+   ([HOSTED_CREAO_RUNBOOK.md](HOSTED_CREAO_RUNBOOK.md)).
 4. Run the full agent workflow against the deployed API and record the probe output.
 5. Configure Elasticsearch Serverless and Agent Builder, run `npm run elastic:bootstrap` and `npm run elastic:reindex`, then run one live investigation and one deliberate failure. [ELASTIC_INTEGRATION.md](ELASTIC_INTEGRATION.md) has the exact contract and live gates.
 6. Record the evidence in [OWNER_CHECKLIST.md](OWNER_CHECKLIST.md).

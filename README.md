@@ -1,17 +1,77 @@
-# Relay Duo 1 — clearing, CREAO, Hyphenate finance, and Elastic investigation
+# Relay — clearing, CREAO, Hyphenate finance, Elastic investigation, and SpareChange execution
 
-This branch is Person B's backend for Relay: deterministic multi-party clearing, CREAO coordination APIs, Hyphenate autonomous finance, financial controls, the Relay-side Duo 2 interface, and the Elastic Agent Builder investigation layer.
+This branch (`integration/duo1-duo2`) combines Duo 1's Relay backend with Duo 2's
+SpareChange console: deterministic multi-party clearing, CREAO coordination APIs,
+Hyphenate autonomous finance, financial controls, Elastic investigation, GPU
+execution, verification, and testnet settlement. The combined system settles a
+real executed deal end-to-end: approvals → contract → real Docker execution →
+verified usage → invoice → human-approved payment → Base Sepolia x402 → Solana
+Devnet provider payout → balanced ledger.
 
-It does **not** implement partner-owned Apify ingestion, Tiger Data provisioning, GPU workers, Solana/x402 execution, or the frontend, and it does not provision an Elastic Cloud project. The `elastic:bootstrap` script configures an existing Elasticsearch Serverless project and Agent Builder. The existing hosted CREAO agent is integrated through APIs, not rebuilt here.
+See [docs/INTEGRATION_STATUS.md](docs/INTEGRATION_STATUS.md) for the verified
+evidence and the honest settlement caveats (demo-scale testnet amounts, invoice ≠
+on-chain value). The redesign-facing contract is
+[docs/FRONTEND_API_CONTRACT.md](docs/FRONTEND_API_CONTRACT.md); reproduction
+steps for all three scenarios are in [docs/DEMO_SCENARIOS.md](docs/DEMO_SCENARIOS.md);
+hosted-agent setup is in [docs/HOSTED_CREAO_RUNBOOK.md](docs/HOSTED_CREAO_RUNBOOK.md).
+
+It does **not** implement partner-owned Apify ingestion, Tiger Data provisioning,
+the frontend redesign, or provision an Elastic Cloud project. The
+`elastic:bootstrap` script configures an existing Elasticsearch Serverless
+project and Agent Builder. The existing hosted CREAO agent is integrated through
+APIs, not rebuilt here.
 
 ## Current status
 
-- **49/49 local tests pass** against embedded Postgres (PGlite), including generalized conditional chains, two- and three-move cycles, uneconomic chain/cycle refusals, the full approval → execution → verified usage → invoice discrepancy → CREAO investigation → blocked payment → correction → test settlement → ledger reconciliation workflow, provider payouts, payout failure recovery, Elastic outbox projection, evidence-citation validation, Agent Builder bootstrap, the Elastic HTTP wire contract, and the Market Intelligence bridge.
-- Typecheck and production build are clean.
-- The machine-readable contract has **73 operations**; the 14 operations used by the existing hosted CREAO Deal Coordinator remain preserved.
-- Live Tiger Data, public hosting, hosted CREAO access, an Elasticsearch Serverless project, real workers, and Duo 2 settlement credentials are external integration dependencies. Missing credentials do not block local development; the finance backend remains operational without Elastic.
+- **51/51 Duo 1 tests pass** against embedded Postgres (PGlite); Duo 2 typecheck
+  and production build are clean.
+- Combined E2E (`npm run e2e`), financial-exception (`npm run e2e:exception`),
+  and multi-party (`npm run e2e:multiparty`) scenarios pass against live Tiger
+  Data, a real Duo 2 server, a real Docker job, and real Base Sepolia / Solana
+  Devnet transfers. Each script prints a machine-readable `SUMMARY` and fails
+  non-zero on a broken invariant; reset between scenarios with
+  `npm run db:reset-demo -- --confirm`.
+- The machine-readable Duo 1 contract has **73 operations**; the 14 operations
+  used by the existing hosted CREAO Deal Coordinator remain preserved.
+- Hosted CREAO has not yet been exercised against a public Relay. That remains
+  blocked on a public HTTPS host and CREAO-side credentials; local runs prove
+  the Relay half only.
+- Live Tiger Data, public hosting, hosted CREAO access, an Elasticsearch
+  Serverless project, real workers, and settlement credentials are external
+  integration dependencies. Missing credentials do not block local development;
+  the finance backend remains operational without Elastic.
 
-## Quick start
+## Combined quick start
+
+```bash
+cp .env.example .env        # add DATABASE_URL, keys, x402 and Solana credentials
+npm install
+npm run db:migrate
+npm run db:seed
+npm run dev                 # Relay :4000
+
+cd duo2 && npm install && npm run build
+# Duo 2 reads its own .env.local, not the repository root .env. Either create
+# duo2/.env.local or export these three aliases before starting:
+export DUO1_API_URL=http://127.0.0.1:4000
+export DUO1_AGENT_API_KEY="$RELAY_API_KEY"
+export DUO1_WORKER_API_KEY="$DUO2_WORKER_API_KEY"
+npm start                   # console :3402
+```
+
+Restart Duo 2 after changing `DUO2_INTERNAL_TOKEN` or any Relay/wallet key; a
+running process keeps the environment it started with, and a mismatch returns
+`401 Unauthorized` from `/api/relay/pay` or `/api/relay/pay-out`.
+
+Then run a real deal end-to-end:
+
+```bash
+npm run e2e -- http://127.0.0.1:4000 http://127.0.0.1:3402
+npm run e2e:exception -- http://127.0.0.1:4000 http://127.0.0.1:3402
+npm run e2e:multiparty -- http://127.0.0.1:4000 http://127.0.0.1:3402
+```
+
+## Duo 1 quick start
 
 Requirements: Node 20.11+, Postgres/Tiger Data for the running server.
 
@@ -46,9 +106,11 @@ npm run build
 npm start
 ```
 
-Container deployment for Duo 1 and Market Intelligence behind Caddy, including
-health checks, migrations, credential bootstrap, and the full startup sequence,
-is documented in [deploy/vultr/README.md](deploy/vultr/README.md).
+Container deployment for the full combined stack (Market Intelligence, Duo 1,
+Duo 2, Caddy), including per-service secret allowlists, health checks,
+migrations, credential bootstrap, persistent Duo 2 state, scenario runs, and the
+deployment gate, is documented in
+[deploy/vultr/README.md](deploy/vultr/README.md).
 
 Tests do not need a live database:
 
@@ -171,11 +233,12 @@ Rules enforced server-side:
 
 ## Remaining integration blockers
 
-1. Partner Tiger Data `DATABASE_URL`; apply `0001`–`0005` and verify the Timescale hypertable.
-2. Shared public HTTPS host.
-3. Hosted CREAO secrets and a 14/14 probe plus full workflow run.
-4. Duo 2 worker/usage and provider-payout contract confirmation; Solana/x402 test credentials.
-5. Elasticsearch Serverless endpoints and scoped API keys; `elastic:bootstrap`, a completed backfill, and a live Agent Builder investigation with validated citations.
-6. A recorded live rehearsal on real workers.
+1. A real Vultr deployment with three public DNS records and valid TLS.
+2. Tiger Data network policy allowing the Vultr egress address; apply migrations through `0008`.
+3. Hosted CREAO secrets, a public Relay URL, a 14/14 read probe, and a full
+   non-mock run. See [docs/HOSTED_CREAO_RUNBOOK.md](docs/HOSTED_CREAO_RUNBOOK.md).
+4. A recorded live rehearsal on the deployed public URLs (the three scenarios).
+5. Elastic remains intentionally disabled for this event; it is not a blocker
+   for transactions or settlement.
 
 See [docs/OWNER_CHECKLIST.md](docs/OWNER_CHECKLIST.md) for scope ownership and acceptance gates, [docs/CREAO_INTEGRATION_STATUS.md](docs/CREAO_INTEGRATION_STATUS.md) for the live-agent status, [docs/CREAO_AGENT_HANDOFF.md](docs/CREAO_AGENT_HANDOFF.md) for the preserved agent specification, [docs/ELASTIC_INTEGRATION.md](docs/ELASTIC_INTEGRATION.md) for the Elastic setup and investigation contract, and [docs/PARTNER_INTEGRATION_HANDOFF.md](docs/PARTNER_INTEGRATION_HANDOFF.md) for exact partner interfaces.

@@ -1,12 +1,36 @@
 services:
   # Market Intelligence (Duo 2) — stateless FastAPI container.
+  # Each service receives only the variables it needs. There is no shared
+  # env_file, so Duo 1 never sees wallet keys and the market API never sees
+  # Relay, x402, or Solana credentials.
   api:
     build:
       context: ../..
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file:
-      - ../../.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      DATABASE_POOL_MIN: ${DATABASE_POOL_MIN:-1}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-8}
+      DATABASE_SCHEMA: ${DATABASE_SCHEMA:-public}
+      MARKET_ADMIN_TOKEN: ${MARKET_ADMIN_TOKEN:?set MARKET_ADMIN_TOKEN in .env}
+      APIFY_TOKEN: ${APIFY_TOKEN:-}
+      APIFY_ACTOR_ID: ${APIFY_ACTOR_ID:-}
+      MARKET_ENABLED_PROVIDERS: ${MARKET_ENABLED_PROVIDERS:-vastai,runpod,akash}
+      VASTAI_API_KEY: ${VASTAI_API_KEY:-}
+      RUNPOD_API_KEY: ${RUNPOD_API_KEY:-}
+      LAMBDA_API_KEY: ${LAMBDA_API_KEY:-}
+      TENSORDOCK_API_KEY: ${TENSORDOCK_API_KEY:-}
+      AKASH_BASE_URL: ${AKASH_BASE_URL:-https://console-api.akash.network/v1}
+      MARKET_FRESH_TTL_SECONDS: ${MARKET_FRESH_TTL_SECONDS:-900}
+      MARKET_ADVERTISED_TTL_SECONDS: ${MARKET_ADVERTISED_TTL_SECONDS:-21600}
+      MARKET_HTTP_TIMEOUT_SECONDS: ${MARKET_HTTP_TIMEOUT_SECONDS:-20}
+      MARKET_MAX_INGEST_ITEMS: ${MARKET_MAX_INGEST_ITEMS:-1000}
+      MARKET_INGESTION_TIMEOUT_SECONDS: ${MARKET_INGESTION_TIMEOUT_SECONDS:-120}
+      MARKET_OBSERVATION_BUCKET_SECONDS: ${MARKET_OBSERVATION_BUCKET_SECONDS:-300}
+      MARKET_REOBSERVE_SECONDS: ${MARKET_REOBSERVE_SECONDS:-300}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     expose:
       - "8000"
     healthcheck:
@@ -19,6 +43,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    security_opt:
+      - no-new-privileges:true
     logging:
       driver: json-file
       options:
@@ -26,16 +52,44 @@ services:
         max-file: "5"
 
   # Duo 1 — Relay finance / CREAO API.
+  # Runtime credentials only: no MIGRATION_DATABASE_URL (DDL is a one-off
+  # `docker compose run` step) and no payment wallet keys.
   duo1:
     build:
       context: ../..
       dockerfile: Dockerfile.duo1
     restart: unless-stopped
-    env_file:
-      - ../../.env
     environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      HOST: 0.0.0.0
+      PORT: "4000"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RELAY_API_KEY: ${RELAY_API_KEY:?set RELAY_API_KEY in .env}
+      RELAY_HUMAN_API_KEY: ${RELAY_HUMAN_API_KEY:-}
+      RELAY_ALLOW_SIMULATED_APPROVALS: ${RELAY_ALLOW_SIMULATED_APPROVALS:-0}
+      RELAY_TIMESCALE: ${RELAY_TIMESCALE:-0}
+      RELAY_DEBUG_ERRORS: ${RELAY_DEBUG_ERRORS:-0}
       # Inside the Compose network the market API is reachable by service name.
       MARKET_API_URL: http://api:8000
+      MARKET_API_TOKEN: ${MARKET_API_TOKEN:-}
+      MARKET_OFFER_TTL_SECONDS: ${MARKET_OFFER_TTL_SECONDS:-900}
+      MARKET_ADVERTISED_OFFER_TTL_SECONDS: ${MARKET_ADVERTISED_OFFER_TTL_SECONDS:-21600}
+      MARKET_SYNC_INTERVAL_MS: ${MARKET_SYNC_INTERVAL_MS:-300000}
+      MARKET_SYNC_MAX_OFFERS: ${MARKET_SYNC_MAX_OFFERS:-1000}
+      # Elastic stays optional. ELASTIC_ENABLED=0 is the supported default and
+      # leaves investigations returning 503 without blocking any transaction.
+      ELASTIC_ENABLED: ${ELASTIC_ENABLED:-0}
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL:-}
+      KIBANA_URL: ${KIBANA_URL:-}
+      ELASTICSEARCH_API_KEY: ${ELASTICSEARCH_API_KEY:-}
+      KIBANA_API_KEY: ${KIBANA_API_KEY:-}
+      ELASTIC_FINANCIAL_INDEX: ${ELASTIC_FINANCIAL_INDEX:-relay-financial-v1}
+      ELASTIC_INVESTIGATOR_AGENT_ID: ${ELASTIC_INVESTIGATOR_AGENT_ID:-relay-financial-investigator}
+      ELASTIC_KIBANA_SPACE: ${ELASTIC_KIBANA_SPACE:-default}
+      ELASTIC_SYNC_INTERVAL_MS: ${ELASTIC_SYNC_INTERVAL_MS:-15000}
+      ELASTIC_INVESTIGATION_TIMEOUT_MS: ${ELASTIC_INVESTIGATION_TIMEOUT_MS:-120000}
+      ELASTIC_MAX_SYNC_BATCH: ${ELASTIC_MAX_SYNC_BATCH:-200}
+      ELASTIC_MAX_BACKFILL_PER_TYPE: ${ELASTIC_MAX_BACKFILL_PER_TYPE:-5000}
     expose:
       - "4000"
     # Deliberately independent of api: a market outage must not block finance.
@@ -49,6 +103,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    security_opt:
+      - no-new-privileges:true
     logging:
       driver: json-file
       options:
@@ -56,13 +112,14 @@ services:
         max-file: "5"
 
   # Duo 2 — SpareChange execution console, job manager and payment rail.
+  # Receives only its own secrets (Relay keys, x402 buyer/provider keys, Solana
+  # payer). It never receives DATABASE_URL, MIGRATION_DATABASE_URL, human
+  # credentials, or the market/Apify keys.
   duo2:
     build:
       context: ../../duo2
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file:
-      - ../../.env
     environment:
       # PORT from the shared .env is Duo 1's; finish on Duo 2's own port.
       PORT: "3402"
@@ -70,12 +127,26 @@ services:
       # Real compute runs as a local worker process: Docker-in-Docker is not
       # available inside the container, and the UI labels the executor it used.
       EXECUTION_MODE: local-process
+      WORKLOAD_SECONDS: ${WORKLOAD_SECONDS:-6}
       # Relay is the system of record: deals, authorization, usage and payment.
       DUO1_API_URL: http://duo1:4000
       DUO1_AGENT_API_KEY: ${RELAY_API_KEY:?set RELAY_API_KEY in .env}
       DUO1_WORKER_API_KEY: ${DUO2_WORKER_API_KEY:?set DUO2_WORKER_API_KEY in .env}
-      DUO2_INTERNAL_TOKEN: ${DUO2_INTERNAL_TOKEN:-}
+      DUO2_INTERNAL_TOKEN: ${DUO2_INTERNAL_TOKEN:?set DUO2_INTERNAL_TOKEN in .env}
       APP_BASE_URL: https://${DUO2_DOMAIN:?set DUO2_DOMAIN in .env}
+      PAYMENT_MODE: ${PAYMENT_MODE:-mock}
+      X402_BUYER_PRIVATE_KEY: ${X402_BUYER_PRIVATE_KEY:-}
+      X402_PROVIDER_PRIVATE_KEY: ${X402_PROVIDER_PRIVATE_KEY:-}
+      X402_PROVIDER_WALLET_ADDRESS: ${X402_PROVIDER_WALLET_ADDRESS:-}
+      X402_REPLACEMENT_WALLET_ADDRESS: ${X402_REPLACEMENT_WALLET_ADDRESS:-}
+      X402_NETWORK: ${X402_NETWORK:-eip155:84532}
+      X402_FACILITATOR_URL: ${X402_FACILITATOR_URL:-https://x402.org/facilitator}
+      X402_SETTLEMENT_PRICE: ${X402_SETTLEMENT_PRICE:-0.01}
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      SOLANA_NETWORK: ${SOLANA_NETWORK:-solana-devnet}
+      SOLANA_PAYER_SECRET_KEY: ${SOLANA_PAYER_SECRET_KEY:-}
+      SOLANA_PAYOUT_ADDRESS: ${SOLANA_PAYOUT_ADDRESS:-}
+      SOLANA_PAYOUT_LAMPORTS: ${SOLANA_PAYOUT_LAMPORTS:-10000000}
     expose:
       - "3402"
     volumes:
@@ -84,15 +155,19 @@ services:
       duo1:
         condition: service_healthy
     healthcheck:
+      # Liveness only: never depends on Solana/x402 availability. Funding and
+      # configuration truth is exposed by GET /api/system for the UI.
       test:
         - CMD
         - node
         - -e
-        - "fetch('http://127.0.0.1:3402/api/system').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        - "fetch('http://127.0.0.1:3402/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 25s
+    security_opt:
+      - no-new-privileges:true
     logging:
       driver: json-file
       options:
@@ -121,6 +196,8 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    security_opt:
+      - no-new-privileges:true
     logging:
       driver: json-file
       options:

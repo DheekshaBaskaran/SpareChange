@@ -66,9 +66,14 @@ export interface SolanaTransferVerification {
 }
 
 const FEE_BUFFER_LAMPORTS = 10_000;
+// Bound every RPC call. Without this a stalled devnet endpoint can hang the
+// system panel (and any caller) indefinitely.
+const RPC_TIMEOUT_MS = 10_000;
 
 function connection(): Connection {
-  return new Connection(getConfig().solana.rpcUrl, "confirmed");
+  const rpcFetch: typeof fetch = (input, init) =>
+    fetch(input, { ...init, signal: AbortSignal.timeout(RPC_TIMEOUT_MS) });
+  return new Connection(getConfig().solana.rpcUrl, { commitment: "confirmed", fetch: rpcFetch });
 }
 
 /** The devnet payer keypair, parsed from a JSON byte array in the environment. */
