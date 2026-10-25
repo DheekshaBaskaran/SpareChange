@@ -14,6 +14,7 @@
     "docker:build": "docker build -t sparechange-worker:latest worker/"
   },
   "dependencies": {
+    "@solana/web3.js": "^1.98.4",
     "@x402/core": "2.28.0",
     "@x402/evm": "2.28.0",
     "@x402/fetch": "2.28.0",

@@ -157,10 +157,18 @@ export function toDuo2Deal(view: RelayDealView): Deal | null {
   const proposal = view.proposal;
   if (!proposal) return null;
   const parties = proposal.parties ?? [];
-  const buyer = parties.find((party) => party.role === "buyer");
-  const provider = parties.find((party) => party.role === "provider");
+  const buyers = parties.filter((party) => party.role === "buyer");
+  const providers = parties.filter((party) => party.role === "provider");
   const workload = view.workload;
-  if (!buyer || !provider || !workload) return null;
+  // A Relay multi-party exchange has several buyers/providers and one contract
+  // per compensation flow. It cannot be represented as a single executable
+  // buyer→provider deal without misrepresenting it, so the single-leg console
+  // does not offer it. Coordinated deals run through the multi-party demo,
+  // which selects the explicit contract for each leg.
+  if (buyers.length !== 1 || providers.length !== 1) return null;
+  const [buyer] = buyers;
+  const [provider] = providers;
+  if (!workload) return null;
 
   const hours = proposal.window?.hours && proposal.window.hours > 0 ? proposal.window.hours : 1;
   const totalMinor = proposal.total_cost_minor ?? 0;
@@ -191,11 +199,49 @@ export function toDuo2Deal(view: RelayDealView): Deal | null {
   };
 }
 
+async function fetchRelayWorkload(workloadId: string): Promise<RelayDealView["workload"]> {
+  const body = await agentCall<{
+    workload: {
+      id: string;
+      buyer_id: string;
+      type: string;
+      gpu_model: string;
+      gpu_count: number;
+      budget_minor: number;
+      flexibility?: Record<string, unknown>;
+    };
+  }>(`/v1/workloads/${workloadId}`);
+  const workload = body.workload;
+  if (!workload) return null;
+  return {
+    id: workload.id,
+    buyer_id: workload.buyer_id,
+    type: workload.type,
+    gpu_model: workload.gpu_model,
+    gpu_count: workload.gpu_count,
+    budget_minor: workload.budget_minor,
+    flexibility: workload.flexibility,
+  };
+}
+
 export async function fetchRelayDeals(status?: string): Promise<Deal[]> {
   const query = status ? `?status=${encodeURIComponent(status)}&limit=20` : "?limit=20";
   const body = await agentCall<{ deals: RelayDealView[] }>(`/v1/deals${query}`);
+  // Relay's list returns the deal and proposal but not the workload resource.
+  // Hydrate it, otherwise every live deal silently converts to null and the
+  // buyer never sees cleared capacity in the console.
+  const views = await Promise.all(
+    (body.deals ?? []).map(async (view) => {
+      if (view.workload || !view.deal?.workload_id) return view;
+      try {
+        return { ...view, workload: await fetchRelayWorkload(view.deal.workload_id) };
+      } catch {
+        return view;
+      }
+    }),
+  );
   const deals: Deal[] = [];
-  for (const view of body.deals ?? []) {
+  for (const view of views) {
     const deal = toDuo2Deal(view);
     if (deal) deals.push(deal);
   }
@@ -243,6 +289,8 @@ export async function reportUsage(input: {
   contractId: string;
   authorizationId: string;
   gpuSeconds: number;
+  /** "contracted_capacity_window" when gpuSeconds comes from the contract, not telemetry. */
+  billingBasis?: "measured_gpu_seconds" | "contracted_capacity_window";
   startedAt: string;
   endedAt: string;
   jobId: string;
@@ -257,6 +305,7 @@ export async function reportUsage(input: {
       contract_id: input.contractId,
       authorization_id: input.authorizationId,
       gpu_seconds: input.gpuSeconds,
+      billing_basis: input.billingBasis,
       started_at: input.startedAt,
       ended_at: input.endedAt,
       job_id: input.jobId,
@@ -304,6 +353,65 @@ export async function confirmSettlement(input: {
       raw: input.raw,
     },
   });
+}
+
+// ── Provider payout (Solana Devnet) ───────────────────────────
+
+export interface RelayPayoutInstruction {
+  id: string;
+  payable_id: string;
+  contract_id: string;
+  invoice_id: string;
+  provider_id: string;
+  amount_minor: number;
+  currency: string;
+  chain: string | null;
+  destination: string | null;
+  status: string;
+  created_at?: string;
+  submitted_at?: string | null;
+  confirmed_at?: string | null;
+}
+
+export async function findPayoutInstruction(instructionId: string): Promise<RelayPayoutInstruction> {
+  const body = await workerCall<{ provider_payout_instructions: RelayPayoutInstruction[] }>(
+    "/internal/v1/duo2/provider-payout-instructions",
+  );
+  const instruction = (body.provider_payout_instructions ?? []).find((candidate) => candidate.id === instructionId);
+  if (!instruction) throw new Error(`Relay payout instruction ${instructionId} was not found`);
+  return instruction;
+}
+
+export async function submitProviderPayout(expectedId: string): Promise<RelayPayoutInstruction> {
+  const body = await workerCall<{ provider_payout_instruction: RelayPayoutInstruction }>(
+    `/internal/v1/duo2/provider-payout-instructions/${expectedId}/submit`,
+    { method: "POST", idempotencyKey: `duo2-payout-submit-${expectedId}` },
+  );
+  return body.provider_payout_instruction;
+}
+
+export async function confirmProviderPayoutSettlement(input: {
+  instructionId: string;
+  amountMinor: number;
+  transactionId: string;
+  providerReference: string;
+  raw?: Record<string, unknown>;
+}): Promise<{ payable_status: string; paid_minor: number; outstanding_minor: number }> {
+  return workerCall<{ payable_status: string; paid_minor: number; outstanding_minor: number }>(
+    "/internal/v1/duo2/provider-settlements",
+    {
+      method: "POST",
+      idempotencyKey: `duo2-payout-settle-${input.instructionId}`,
+      body: {
+        instruction_id: input.instructionId,
+        status: "confirmed",
+        amount_minor: input.amountMinor,
+        transaction_id: input.transactionId,
+        provider_reference: input.providerReference,
+        raw: input.raw,
+      },
+    },
+  );
 }
 
 /** Live GPU listings from Relay's offer book, for the market table. */

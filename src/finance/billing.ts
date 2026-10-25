@@ -5,10 +5,18 @@ import { requireActiveContract } from "./contracts.js";
 import { ApiError } from "../errors.js";
 import { asObject, iso, minor } from "../db/values.js";
 
+export type BillingBasis = "measured_gpu_seconds" | "contracted_capacity_window";
+
 export interface VerifiedUsageInput {
   contractId: string;
   authorizationId: string;
   gpuSeconds: number;
+  /**
+   * What the reported GPU-seconds actually represent. `measured_gpu_seconds`
+   * means worker-measured hardware time; `contracted_capacity_window` means the
+   * contracted GPU count × reserved hours, not hardware telemetry.
+   */
+  billingBasis?: BillingBasis;
   startedAt: string;
   endedAt: string;
   jobId?: string | null;
@@ -87,6 +95,11 @@ export async function recordVerifiedUsage(
   }
 
   const amountMinor = computeUsageAmountMinor(input.gpuSeconds, rate);
+  const billingBasis: BillingBasis = input.billingBasis ?? "measured_gpu_seconds";
+  const measuredGpuSeconds =
+    typeof input.evidence === "object" && input.evidence !== null
+      ? Number((input.evidence as Record<string, unknown>).measured_gpu_seconds)
+      : NaN;
   const executionEventId = input.executionEventId ?? randomUUID();
   const usageId = randomUUID();
   const calculationId = randomUUID();
@@ -120,7 +133,7 @@ export async function recordVerifiedUsage(
       `INSERT INTO verified_usage
          (id, execution_event_id, workload_id, contract_id, gpu_model, gpu_count,
           gpu_seconds, billing_basis, verified_at, evidence)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'measured_gpu_seconds', $8, $9::jsonb)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)`,
       [
         usageId,
         executionEventId,
@@ -129,6 +142,7 @@ export async function recordVerifiedUsage(
         gpuModel,
         gpuCount,
         input.gpuSeconds,
+        billingBasis,
         verifiedAt,
         JSON.stringify({
           ...asObject(input.evidence),
@@ -139,6 +153,7 @@ export async function recordVerifiedUsage(
         }),
       ],
     );
+    const contracted = billingBasis === "contracted_capacity_window";
     const breakdown = {
       formula: "ceil(gpu_seconds / 3600 * rate_minor_per_gpu_hour)",
       gpu_seconds: input.gpuSeconds,
@@ -148,12 +163,26 @@ export async function recordVerifiedUsage(
       minimum_charge_minor: 0,
       authorization_id: input.authorizationId,
       contract_id: input.contractId,
+      billing_basis: billingBasis,
+      measured_gpu_seconds: Number.isFinite(measuredGpuSeconds) ? measuredGpuSeconds : null,
+      note: contracted
+        ? "gpu_seconds is the contracted capacity window (GPU count × reserved hours), not measured hardware time. Measured worker time is recorded separately in evidence."
+        : "gpu_seconds is worker-measured hardware time.",
     };
     await tx.query(
       `INSERT INTO billing_calculations
          (id, contract_id, usage_id, calculation_version, amount_minor, currency, basis, breakdown)
-       VALUES ($1, $2, $3, 'measured-v1', $4, $5, 'verified_measured_gpu_seconds', $6::jsonb)`,
-      [calculationId, input.contractId, usageId, amountMinor, currency, JSON.stringify(breakdown)],
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
+      [
+        calculationId,
+        input.contractId,
+        usageId,
+        contracted ? "contracted-v1" : "measured-v1",
+        amountMinor,
+        currency,
+        contracted ? "verified_contracted_capacity" : "verified_measured_gpu_seconds",
+        JSON.stringify(breakdown),
+      ],
     );
     await appendAudit(tx, {
       actorId: input.actorId,
@@ -167,6 +196,8 @@ export async function recordVerifiedUsage(
         contract_id: input.contractId,
         execution_event_id: executionEventId,
         gpu_seconds: input.gpuSeconds,
+        billing_basis: billingBasis,
+        measured_gpu_seconds: Number.isFinite(measuredGpuSeconds) ? measuredGpuSeconds : null,
         amount_minor: amountMinor,
         currency,
         authorization_id: input.authorizationId,
@@ -181,15 +212,15 @@ export async function recordVerifiedUsage(
       gpu_model: gpuModel,
       gpu_count: gpuCount,
       gpu_seconds: input.gpuSeconds,
-      billing_basis: "measured_gpu_seconds",
+      billing_basis: billingBasis,
       verified_at: verifiedAt,
       evidence: input.evidence ?? {},
       billing: {
         id: calculationId,
         amount_minor: amountMinor,
         currency,
-        basis: "verified_measured_gpu_seconds",
-        calculation_version: "measured-v1",
+        basis: contracted ? "verified_contracted_capacity" : "verified_measured_gpu_seconds",
+        calculation_version: contracted ? "contracted-v1" : "measured-v1",
         breakdown,
       },
     };
@@ -205,6 +236,8 @@ export async function listVerifiedUsage(
   gpu_model: string;
   gpu_count: number;
   gpu_seconds: number;
+  billing_basis: string;
+  measured_gpu_seconds: number | null;
   verified_at: string | null;
   billing_amount_minor: number | null;
   currency: string | null;
@@ -215,11 +248,15 @@ export async function listVerifiedUsage(
     gpu_model: string;
     gpu_count: number;
     gpu_seconds: unknown;
+    billing_basis: string;
+    measured_gpu_seconds: unknown;
     verified_at: unknown;
     amount_minor: unknown;
     currency: string | null;
   }>(
     `SELECT u.id, u.execution_event_id, u.gpu_model, u.gpu_count, u.gpu_seconds,
+            u.billing_basis,
+            (b.breakdown->>'measured_gpu_seconds')::numeric AS measured_gpu_seconds,
             u.verified_at, b.amount_minor, b.currency
      FROM verified_usage u
      LEFT JOIN billing_calculations b ON b.usage_id = u.id
@@ -233,6 +270,8 @@ export async function listVerifiedUsage(
     gpu_model: row.gpu_model,
     gpu_count: row.gpu_count,
     gpu_seconds: Number(row.gpu_seconds),
+    billing_basis: row.billing_basis,
+    measured_gpu_seconds: row.measured_gpu_seconds == null ? null : Number(row.measured_gpu_seconds),
     verified_at: iso(row.verified_at),
     billing_amount_minor: row.amount_minor == null ? null : minor(row.amount_minor),
     currency: row.currency,

@@ -100,6 +100,12 @@ export async function seedDemo(db: Db): Promise<void> {
       {
         offer_id: DEMO_IDS.offers.vertex,
         provider_id: DEMO_IDS.parties.vertex,
+        // Vertex's window is currently held by Acme. The exchange releases that
+        // exact allocation before assigning the window to Brightlane, so the
+        // authorization must name it; otherwise the capacity check sees a
+        // conflict with the very allocation this deal is replacing.
+        buyer_id: DEMO_IDS.parties.brightlane,
+        release_allocation_id: DEMO_IDS.allocations.acmeVertex,
         gpu_count: 8,
         window_start: windowStart,
         window_end: windowEnd,
@@ -108,6 +114,8 @@ export async function seedDemo(db: Db): Promise<void> {
       {
         offer_id: DEMO_IDS.offers.northstar,
         provider_id: DEMO_IDS.parties.northstar,
+        // Northstar's replacement capacity is reserved for Acme.
+        buyer_id: DEMO_IDS.parties.acme,
         gpu_count: 8,
         window_start: windowStart,
         window_end: windowEnd,

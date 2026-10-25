@@ -300,9 +300,10 @@ export async function generateInvoiceForContract(
       currency: string;
       gpu_seconds: unknown;
       rate_minor_per_gpu_hour: unknown;
+      basis: string;
     }>(
       `SELECT b.id AS calculation_id, u.id AS usage_id, b.amount_minor, b.currency,
-              u.gpu_seconds,
+              u.gpu_seconds, b.basis,
               COALESCE((b.breakdown->>'rate_minor_per_gpu_hour')::bigint, 0) AS rate_minor_per_gpu_hour
        FROM billing_calculations b
        JOIN verified_usage u ON u.id = b.usage_id
@@ -319,8 +320,13 @@ export async function generateInvoiceForContract(
     const lines: PendingLine[] = unbilled.rows.map((row) => {
       const amount = minor(row.amount_minor);
       const gpuHours = Number(row.gpu_seconds) / 3600;
+      // Do not call contracted capacity "verified usage": the GPU-seconds are
+      // the reserved window, not worker-measured hardware time.
+      const contracted = row.basis === "verified_contracted_capacity";
       return {
-        description: `Verified ${terms.gpu_model ?? "GPU"} usage (${gpuHours.toFixed(3)} GPU-hours)`,
+        description: contracted
+          ? `Contracted ${terms.gpu_model ?? "GPU"} capacity window (${gpuHours.toFixed(3)} GPU-hours, not measured hardware time)`
+          : `Verified ${terms.gpu_model ?? "GPU"} usage (${gpuHours.toFixed(3)} GPU-hours)`,
         quantity: Math.max(0.001, Number(gpuHours.toFixed(3))),
         unitRateMinor: minor(row.rate_minor_per_gpu_hour),
         amountMinor: amount,

@@ -32,6 +32,9 @@ const usageBody = z.object({
   contract_id: z.string().uuid(),
   authorization_id: z.string().uuid(),
   gpu_seconds: z.number().positive(),
+  // Distinguishes worker-measured hardware time from the contracted capacity
+  // window. Defaults to measured for existing callers.
+  billing_basis: z.enum(["measured_gpu_seconds", "contracted_capacity_window"]).optional(),
   started_at: z.string().datetime({ offset: true }),
   ended_at: z.string().datetime({ offset: true }),
   job_id: z.string().trim().min(1).max(200).nullable().optional(),
@@ -93,6 +96,7 @@ export function registerDuo2Routes(app: FastifyInstance, db: Db): void {
         contractId: body.contract_id,
         authorizationId: body.authorization_id,
         gpuSeconds: body.gpu_seconds,
+        billingBasis: body.billing_basis,
         startedAt: body.started_at,
         endedAt: body.ended_at,
         jobId: body.job_id,

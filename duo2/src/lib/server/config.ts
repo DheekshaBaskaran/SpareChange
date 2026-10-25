@@ -44,6 +44,18 @@ export function getConfig() {
       settlementPrice: `$${(readEnv("X402_SETTLEMENT_PRICE") ?? "0.01").replace(/^\$/, "")}`,
     },
 
+    // Solana Devnet payout rail. Separate from the Base Sepolia x402 buyer leg:
+    // the provider payout is a direct native-SOL transfer on Solana Devnet.
+    solana: {
+      rpcUrl: readEnv("SOLANA_RPC_URL") ?? "https://api.devnet.solana.com",
+      network: readEnv("SOLANA_NETWORK") ?? "solana-devnet",
+      payerSecret: readEnv("SOLANA_PAYER_SECRET_KEY"),
+      // Only this address may receive a payout; also acts as the allowlist.
+      payoutAddress: readEnv("SOLANA_PAYOUT_ADDRESS"),
+      // Demonstration-scale amount. The instruction's USD value is accounting only.
+      payoutLamports: Number(readEnv("SOLANA_PAYOUT_LAMPORTS") ?? 10_000_000),
+    },
+
     // Duo 1 integration: where to fetch approved deals from (optional).
     duo1DealsUrl: readEnv("DUO1_DEALS_URL"),
     // Duo 1 integration: where to fetch live GPU listings from (optional).

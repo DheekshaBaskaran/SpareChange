@@ -21,7 +21,9 @@
     "elastic:bootstrap": "tsx src/cli/elastic-bootstrap.ts",
     "elastic:reindex": "tsx src/cli/elastic-reindex.ts",
     "smoke": "tsx scripts/smoke-duo1.ts",
-    "e2e": "tsx scripts/e2e-combined.ts"
+    "e2e": "tsx scripts/e2e-combined.ts",
+    "e2e:multiparty": "tsx scripts/e2e-multiparty.ts",
+    "e2e:exception": "tsx scripts/e2e-exception.ts"
   },
   "dependencies": {
     "fastify": "^5.0.0",

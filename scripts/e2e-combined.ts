@@ -119,6 +119,44 @@ function check(label: string, result: Result, allowed: number | number[], detail
 
 const money = (minor: number) => `${(minor / 100).toFixed(2)} USD`;
 
+/** Confirm a Solana transfer through RPC and measure the recipient's lamport delta. */
+async function verifySolanaTransfer(
+  signature: string,
+  destination: string,
+  minLamports: number,
+): Promise<{ slot: number | null; lamportsReceived: number; payer: string | null }> {
+  const rpc = process.env.SOLANA_RPC_URL?.trim() || "https://api.devnet.solana.com";
+  const response = await fetch(rpc, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "getTransaction",
+      params: [signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 }],
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const body = (await response.json()) as {
+    result?: {
+      slot: number;
+      meta?: { err: unknown; preBalances: number[]; postBalances: number[] } | null;
+      transaction: { message: { accountKeys: Array<string | { pubkey: string }> } };
+    };
+    error?: { message?: string };
+  };
+  if (!body.result) throw new Error(`Solana RPC could not find ${signature}: ${body.error?.message ?? "no result"}`);
+  if (body.result.meta?.err) throw new Error(`Solana transaction failed: ${JSON.stringify(body.result.meta.err)}`);
+  const keys = body.result.transaction.message.accountKeys.map((key) => (typeof key === "string" ? key : key.pubkey));
+  const index = keys.indexOf(destination);
+  if (index === -1) throw new Error("Payout destination is not part of the Solana transaction");
+  const received = (body.result.meta?.postBalances[index] ?? 0) - (body.result.meta?.preBalances[index] ?? 0);
+  if (received < minLamports) {
+    throw new Error(`Solana recipient received ${received} lamports, expected at least ${minLamports}`);
+  }
+  return { slot: body.result.slot, lamportsReceived: received, payer: keys[0] ?? null };
+}
+
 async function main(): Promise<void> {
   const agentKey = env("RELAY_API_KEY");
   const financeKey = env("DUO1_FINANCE_API_KEY");
@@ -248,8 +286,17 @@ async function main(): Promise<void> {
   const recorded = (usage.json.verified_usage ?? [])[0];
   if (!recorded) throw new Error("Relay has no verified usage for the contract");
   console.log(
-    `      usage ${recorded.id}: ${recorded.gpu_seconds} GPU-seconds recorded against contract ${contract.id}`,
+    `      usage ${recorded.id}: ${recorded.gpu_seconds} contracted GPU-seconds on contract ${contract.id}`,
   );
+  console.log(
+    `      basis ${recorded.billing_basis}; worker-measured ${recorded.measured_gpu_seconds ?? "n/a"} GPU-seconds (${job.execution?.runtimeMs}ms runtime)`,
+  );
+  if (recorded.billing_basis !== "contracted_capacity_window") {
+    throw new Error(`Relay recorded the basis as ${recorded.billing_basis}; contracted capacity must not be labelled measured hardware time`);
+  }
+  if (recorded.measured_gpu_seconds == null) {
+    throw new Error("Relay did not store the worker-measured GPU-seconds alongside the contracted window");
+  }
 
   // ── Invoice + reconciliation ────────────────────────────────
   const invoice = await relay("POST", `/v1/contracts/${contract.id}/invoices`, financeKey);
@@ -314,6 +361,16 @@ async function main(): Promise<void> {
     pass("simulated settlement recorded", "relay + duo2 both label it simulated");
   }
 
+  // Idempotency: asking again must not move a second payment.
+  const settleAgain = await duo2("POST", "/api/relay/pay", {
+    instruction_id: instruction.id,
+    job_id: jobId,
+  });
+  check("duplicate settlement request is idempotent", settleAgain, 200);
+  if (settleAgain.json.already_settled !== true || settleAgain.json.transaction_id !== settle.json.transaction_id) {
+    throw new Error("a repeated settlement request produced a different result");
+  }
+
   const paidInvoice = await relay("GET", `/v1/invoices/${invoiceId}`, financeKey);
   check("invoice paid", paidInvoice, 200);
   if (paidInvoice.json.invoice.status !== "paid") {
@@ -342,9 +399,18 @@ async function main(): Promise<void> {
   const payable = (payables.json.payables ?? [])[0];
   if (!payable) throw new Error("no provider payable accrued from the invoice");
 
+  const solana = duo2System.json?.payments?.solanaPayout as
+    | { configured: boolean; funded: boolean; payoutAddress: string | null; reason: string | null; network: string }
+    | undefined;
+  const solanaLive = Boolean(solana?.configured && solana.funded && solana.payoutAddress);
+  console.log(
+    solanaLive
+      ? `      solana payout rail ready: ${solana!.payoutAddress} on ${solana!.network}`
+      : `      SOLANA PAYOUT BLOCKED: ${solana?.reason ?? (solana?.funded === false ? "payer wallet is unfunded" : "not configured")}`,
+  );
   const payoutRequest = await relay("POST", `/v1/provider-payables/${payable.id}/payout-instruction`, financeKey, {
     chain: "solana-devnet",
-    destination: "provider-combined-wallet",
+    destination: solanaLive ? solana!.payoutAddress! : "provider-combined-wallet",
   });
   check("provider payout requested", payoutRequest, 202);
 
@@ -357,22 +423,69 @@ async function main(): Promise<void> {
   check("human approves payout", payoutApproval, 200);
   const payout = payoutApproval.json.result.instruction;
 
-  const workerKey = env("DUO2_WORKER_API_KEY");
-  const payoutSubmit = await relay(
-    "POST",
-    `/internal/v1/duo2/provider-payout-instructions/${payout.id}/submit`,
-    workerKey,
-  );
-  check("provider payout submitted", payoutSubmit, 200);
-  const payoutSettlement = await relay("POST", "/internal/v1/duo2/provider-settlements", workerKey, {
-    instruction_id: payout.id,
-    status: "confirmed",
-    amount_minor: payout.amount_minor,
-    transaction_id: `${runId}-payout`,
-    provider_reference: `combined:payout:${payout.id}`,
-    raw: { rail: "mock", simulated_value: true },
-  });
-  check("provider payout settled", payoutSettlement, 200, payoutSettlement.json?.payable_status);
+  let payoutEvidence: Record<string, unknown>;
+  if (solanaLive) {
+    const paid = await duo2("POST", "/api/relay/pay-out", { payout_instruction_id: payout.id });
+    check("provider payout sent on Solana Devnet", paid, 200);
+    const signature = paid.json.signature as string;
+    if (!signature) throw new Error("Solana payout returned no signature");
+    if (paid.json.network !== "solana-devnet" || paid.json.asset !== "SOL") {
+      throw new Error(`Unexpected Solana payout asset/network: ${paid.json.asset} ${paid.json.network}`);
+    }
+    console.log(
+      `      sol ${paid.json.sol} (${paid.json.lamports} lamports) → ${paid.json.destination} · sig ${signature}`,
+    );
+    console.log(`      explorer ${paid.json.explorer_url}`);
+
+    // Independent confirmation through Solana RPC: never trust the sender's
+    // own response as proof of an on-chain transfer.
+    const verified = await verifySolanaTransfer(signature, paid.json.destination, paid.json.lamports);
+    pass("independent Solana confirmation", `slot ${verified.slot} · ${verified.lamportsReceived} lamports received`);
+
+    // Idempotency: the durable payout record must return the same signature
+    // instead of broadcasting a second transfer.
+    const payoutAgain = await duo2("POST", "/api/relay/pay-out", { payout_instruction_id: payout.id });
+    check("duplicate payout request is idempotent", payoutAgain, 200);
+    if (payoutAgain.json.already_settled !== true || payoutAgain.json.signature !== signature) {
+      throw new Error("a repeated payout request produced a different signature");
+    }
+    payoutEvidence = {
+      payout_rail: "solana-devnet",
+      payout_asset: "SOL",
+      payout_signature: signature,
+      payout_lamports: paid.json.lamports,
+      payout_slot: verified.slot,
+      payout_payer: verified.payer,
+      payout_destination: paid.json.destination,
+      payout_simulated: false,
+      payout_status: paid.json.payable_status,
+    };
+  } else {
+    const workerKey = env("DUO2_WORKER_API_KEY");
+    const payoutSubmit = await relay(
+      "POST",
+      `/internal/v1/duo2/provider-payout-instructions/${payout.id}/submit`,
+      workerKey,
+    );
+    check("provider payout submitted", payoutSubmit, 200);
+    const payoutSettlement = await relay("POST", "/internal/v1/duo2/provider-settlements", workerKey, {
+      instruction_id: payout.id,
+      status: "confirmed",
+      amount_minor: payout.amount_minor,
+      transaction_id: `${runId}-payout`,
+      provider_reference: `combined:payout:${payout.id}`,
+      raw: { rail: "mock", simulated_value: true, blocker: solana?.reason ?? "solana payout rail unavailable" },
+    });
+    check("provider payout recorded as simulated", payoutSettlement, 200, payoutSettlement.json?.payable_status);
+    payoutEvidence = {
+      payout_rail: "mock",
+      payout_asset: null,
+      payout_signature: null,
+      payout_simulated: true,
+      payout_status: payoutSettlement.json?.payable_status,
+      payout_blocker: solana?.reason ?? "solana payout rail unavailable",
+    };
+  }
 
   // ── Final integrity checks ──────────────────────────────────
   const finalReconcile = await relay("POST", "/v1/finance/reconciliations", financeKey);
@@ -438,6 +551,8 @@ async function main(): Promise<void> {
           authorization_id: authorization.id,
           contract_id: contract.id,
           usage_gpu_seconds: recorded.gpu_seconds,
+          usage_billing_basis: recorded.billing_basis,
+          usage_measured_gpu_seconds: recorded.measured_gpu_seconds,
           invoice_id: invoiceId,
           invoice_total_minor: paidInvoice.json.invoice.total_minor,
           settlement_rail: settle.json.rail,
@@ -445,7 +560,7 @@ async function main(): Promise<void> {
           settlement_network: settle.json.network ?? null,
           settlement_onchain_amount: settle.json.onchain_amount ?? null,
           settlement_transaction: settle.json.transaction_id,
-          payout_status: payoutSettlement.json?.payable_status,
+          ...payoutEvidence,
           balanced: balance.json.balanced,
         },
         null,

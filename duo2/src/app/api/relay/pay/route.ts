@@ -55,16 +55,23 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: (error as Error).message }, { status: 404 });
   }
 
+  const job = body.job_id ? getJob(body.job_id) : findJobForContract(instruction.contract_id);
+
   if (instruction.status === "confirmed") {
+    // Report the settlement that actually happened. A repeated request must be
+    // byte-for-byte safe for the caller and must never trigger a new transfer.
+    const recorded = job?.payment?.transactionId ?? null;
     return Response.json({
       success: true,
       already_settled: true,
       instruction_id: instruction.id,
       invoice_id: instruction.invoice_id,
+      transaction_id: recorded,
+      network: job?.payment?.network ?? null,
+      onchain_amount: job?.payment?.settledOnChainAmount ?? null,
+      job_id: job?.jobId ?? null,
     });
   }
-
-  const job = body.job_id ? getJob(body.job_id) : findJobForContract(instruction.contract_id);
 
   let submitted = instruction;
   if (instruction.status === "created") {

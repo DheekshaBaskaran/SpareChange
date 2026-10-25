@@ -131,10 +131,14 @@ async function runJob(job: Job, options: ExecuteOptions): Promise<void> {
         job.deal.workload.gpuCount * job.deal.workload.durationMinutes * 60,
       );
       try {
+        const measuredGpuSeconds = Math.round((job.execution!.runtimeMs ?? 0) / 1000) * job.deal.workload.gpuCount;
         const usage = await reportUsage({
           contractId: link.contractId!,
           authorizationId: link.authorizationId!,
+          // Contracted capacity window (GPU count × reserved duration). This is
+          // the invoice basis; it is NOT measured hardware time.
           gpuSeconds,
+          billingBasis: "contracted_capacity_window",
           startedAt: job.execution!.startedAt,
           endedAt: job.execution!.endedAt ?? new Date().toISOString(),
           jobId: job.jobId,
@@ -145,8 +149,13 @@ async function runJob(job: Job, options: ExecuteOptions): Promise<void> {
             workload_runtime_ms: job.execution!.runtimeMs,
             verification: job.verification?.status,
             accuracy: job.execution!.output?.accuracy,
-            billing_basis: "reserved_contract_window",
-            measured_gpu_seconds: Math.round((job.execution!.runtimeMs ?? 0) / 1000) * job.deal.workload.gpuCount,
+            billing_basis: "contracted_capacity_window",
+            contracted_gpu_seconds: gpuSeconds,
+            contracted_gpu_count: job.deal.workload.gpuCount,
+            contracted_minutes: job.deal.workload.durationMinutes,
+            measured_runtime_ms: job.execution!.runtimeMs ?? null,
+            measured_gpu_seconds: measuredGpuSeconds,
+            note: "gpu_seconds is the contracted capacity window, not measured GPU hardware time. Only measured_gpu_seconds comes from the worker runtime."
           },
         });
         job.relay = {
