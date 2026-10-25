@@ -1,126 +1,27 @@
 "use client";
-
-// Top navigation bar plus a small "system" indicator that shows which
-// integrations are live right now (execution + payment modes).
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Logo } from "./logo";
-import { cx } from "./ui";
-
-interface SystemSummary {
-  executor: string;
-  executorReal: boolean;
-  payment: string;
-  paymentState: "planned" | "live" | "simulated";
-}
-
-const NAV = [
-  { href: "/", label: "Market" },
-  { href: "/deals/deal_7f3a21", label: "Deals", match: "/deals" },
-  { href: "/executions", label: "Executions", match: "/jobs" },
-  { href: "/system", label: "System" },
-];
-
+const NAV = [["/", "Overview", "38f09.svg"], ["/market", "Market", "3cacf.svg"], ["/deals", "Deals", "d5533.svg"], ["/money", "Money", "4b6e2.svg"], ["/activity", "Activity", "4bb00.svg"]];
 export function SiteHeader() {
-  const pathname = usePathname();
-  const [system, setSystem] = useState<SystemSummary | null>(null);
-
-  // Refresh on every navigation and every few seconds, so the payment label
-  // updates as soon as a job settles.
-  useEffect(() => {
-    const load = () =>
-      fetch("/api/system")
-        .then((response) => response.json())
-        .then((data) => {
-          const firstAvailable = data.executors.find((executor: { available: boolean }) => executor.available);
-          setSystem({
-            executor: firstAvailable?.label ?? "Simulated worker",
-            executorReal: firstAvailable?.mode !== "mock",
-            // Based on what payment actually did, never on configuration alone.
-            payment: data.payments.lastOutcome.label,
-            paymentState: data.payments.lastOutcome.state,
-          });
-        })
-        .catch(() => undefined);
-    load();
-    const timer = setInterval(load, 5000);
-    return () => clearInterval(timer);
-  }, [pathname]);
-
-  return <HeaderLayout pathname={pathname} system={system} />;
+ const pathname = usePathname();
+ const [connected, setConnected] = useState(false);
+ const [search, setSearch] = useState(false);
+ const [query, setQuery] = useState("");
+ useEffect(() => {
+  const load = () => fetch("/api/health").then(r => setConnected(r.ok)).catch(() => setConnected(false));
+  load(); const timer = setInterval(load, 10000);
+  const key = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setSearch(s => !s); } if (e.key === "Escape") setSearch(false); };
+  window.addEventListener("keydown", key);
+  return () => { clearInterval(timer); window.removeEventListener("keydown", key); };
+ }, []);
+ if (pathname === "/welcome") return null;
+ const current = NAV.find(([href]) => href === "/" ? pathname === "/" : pathname.startsWith(href));
+ return <>
+ <aside className="sparo-sidebar"><Link href="/welcome" className="sparo-logo"><img src="/figma/19802.svg" alt="" />sparo</Link><span className="sparo-eyebrow workspace-label">WORKSPACE</span>
+ <nav aria-label="Main navigation">{NAV.map(([href, label, icon]) => <Link key={href} href={href} aria-current={current?.[0] === href ? "page" : undefined} className={current?.[0] === href ? "active" : ""}><img src={"/figma/" + icon} alt="" />{label}</Link>)}</nav>
+ <div className="sidebar-bottom"><Link href="/system"><img src="/figma/6e1ad.svg" alt="" />System status</Link><hr /><small>DEVELOPMENT WORKSPACE</small><p>Testnet rails · demo-scale settlement</p></div></aside>
+ <header className="sparo-header"><span>Workspace / {current?.[1] ?? "Execution & system"}</span><button className="search-trigger" onClick={() => setSearch(true)}><img src="/figma/5576d.svg" alt="" />Search anything <kbd>Ctrl K</kbd></button><span className={"sparo-tag " + (connected ? "green" : "")}>{connected ? "Connected" : "Connecting…"}</span><span className="sparo-button">Observer</span></header>
+ {search && <div className="search-overlay" onClick={() => setSearch(false)}><section role="dialog" aria-modal="true" aria-label="Search workspace" className="search-dialog" onClick={e => e.stopPropagation()}><div className="flex justify-between"><h2>Search or jump to…</h2><button onClick={() => setSearch(false)} aria-label="Close search">✕</button></div><input autoFocus placeholder="Search pages…" value={query} onChange={e => setQuery(e.target.value)} />{[...NAV, ["/executions", "Executions"], ["/system", "System status"]].filter(([, label]) => label.toLowerCase().includes(query.toLowerCase())).map(([href, label]) => <Link key={href} href={href} onClick={() => setSearch(false)}>{label}<span>↗</span></Link>)}</section></div>}</>;
 }
-
-/** Static version shown while the header loads (no hooks, so it can be prerendered). */
-export function SiteHeaderFallback() {
-  return <HeaderLayout pathname="" system={null} />;
-}
-
-function HeaderLayout({ pathname, system }: { pathname: string; system: SystemSummary | null }) {
-  return (
-    <header className="sticky top-0 z-30 border-b border-line bg-canvas/85 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-[1320px] items-center gap-8 px-5 lg:px-8">
-        <Link href="/" aria-label="SpareChange home">
-          <Logo />
-        </Link>
-        <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
-          {NAV.map((item) => {
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.match ?? item.href);
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                className={cx(
-                  "rounded-md px-3 py-1.5 text-sm transition-colors",
-                  active ? "bg-surface-3 text-ink" : "text-muted hover:text-ink",
-                )}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <Link
-          href="/system"
-          className="ml-auto hidden items-center gap-3 rounded-full border border-line bg-surface px-3 py-1 text-xs text-muted transition-colors hover:border-line-strong sm:flex"
-          title="Which integrations are live"
-        >
-          {system ? (
-            <>
-              <span className="flex items-center gap-1.5">
-                <span className={cx("size-1.5 rounded-full", system.executorReal ? "bg-value" : "bg-muted")} aria-hidden />
-                {system.executor}
-              </span>
-              <span className="h-3 w-px bg-line-strong" aria-hidden />
-              <span className="flex items-center gap-1.5">
-                <span
-                  className={cx("size-1.5 rounded-full", system.paymentState === "live" ? "bg-value" : system.paymentState === "planned" ? "border border-muted" : "bg-muted")}
-                  aria-hidden
-                />
-                {system.payment}
-              </span>
-            </>
-          ) : (
-            <span>Checking system…</span>
-          )}
-        </Link>
-      </div>
-      {/* Phones: the main nav as a compact second row */}
-      <nav className="flex gap-1 overflow-x-auto px-3 pb-2 md:hidden" aria-label="Main (mobile)">
-        {NAV.map((item) => {
-          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.match ?? item.href);
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={cx("shrink-0 rounded-md px-3 py-1 text-sm", active ? "bg-surface-3 text-ink" : "text-muted")}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-    </header>
-  );
-}
+export function SiteHeaderFallback() { return <div className="sparo-header">Loading workspace…</div>; }

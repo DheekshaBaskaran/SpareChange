@@ -9,23 +9,23 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 
-  --color-canvas: #07080a;
-  --color-surface: #0e1013;
-  --color-surface-2: #14171c;
-  --color-surface-3: #1b1f26;
-  --color-line: #20252d;
-  --color-line-strong: #2d343f;
+  --color-canvas: #100f0e;
+  --color-surface: #171615;
+  --color-surface-2: #201d1b;
+  --color-surface-3: #292521;
+  --color-line: #34302d;
+  --color-line-strong: #48403b;
 
-  --color-ink: #f1f3f6;
-  --color-ink-2: #c5cbd5;
-  --color-muted: #8d96a5;
-  --color-faint: #5d6675;
+  --color-ink: #f4f0eb;
+  --color-ink-2: #d5ccc4;
+  --color-muted: #b6ada5;
+  --color-faint: #8e857d;
 
-  --color-value: #3ddc97;
+  --color-value: #a5ccb4;
   --color-value-dim: #1d6b4a;
-  --color-compute: #7c9cff;
+  --color-compute: #e4a28b;
   --color-compute-dim: #34437a;
-  --color-pending: #f5b54a;
+  --color-pending: #e3c48f;
   --color-danger: #f26d6d;
 }
 
@@ -126,3 +126,72 @@ body {
   outline: 2px solid var(--color-compute);
   outline-offset: 2px;
 }
+
+/* Sparo desktop workspace, from the supplied Figma frames. */
+body{min-width:1100px}
+body>main,body>footer{margin-left:216px}
+body:has(.landing)>main,body:has(.landing)>footer{margin-left:0}
+button,a,input,select{transition:background-color .15s,border-color .15s}
+button{cursor:pointer}button:disabled{cursor:wait;opacity:.55}
+.sparo-sidebar{position:fixed;inset:0 auto 0 0;width:216px;padding:24px;background:#171615;display:flex;flex-direction:column;z-index:40}
+.sparo-logo{display:flex;align-items:center;gap:10px;font-size:23px;letter-spacing:1.4px;color:#f4f0eb}
+.sparo-logo img{width:30px;height:26px}
+.sparo-eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:1.3px;color:#e4a28b}
+.workspace-label{margin-top:8px;height:62px}
+.sparo-sidebar nav{display:flex;flex-direction:column;gap:8px}
+.sparo-sidebar nav a{display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;font-size:14px;color:#b6ada5}
+.sparo-sidebar nav a.active{background:#35231e;color:#e4a28b}
+.sparo-sidebar nav a:hover{background:#29211d}
+.sparo-sidebar nav img,.sidebar-bottom img{width:18px;height:18px}
+.sidebar-bottom{margin-top:auto;font-size:12px;color:#b6ada5;padding-top:40px}
+.sidebar-bottom a{display:flex;gap:10px;align-items:center}
+.sidebar-bottom hr{border-color:#34302d;margin:16px 0 10px}
+.sidebar-bottom small{font:10px var(--font-mono);color:#8e857d}
+.sidebar-bottom p{font-size:10px;margin-top:8px}
+.sparo-header{margin-left:216px;height:86px;display:flex;align-items:center;gap:22px;padding:22px 40px;color:#b6ada5;font-size:12px}
+.sparo-header>span:first-child{flex:1}
+.search-trigger{border:1px solid #34302d;border-radius:8px;width:250px;padding:9px 12px;display:flex;align-items:center;gap:8px;color:#8e857d}
+.search-trigger img{width:16px;height:16px}.search-trigger kbd{margin-left:auto;font-size:10px}
+.sparo-button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 24px;border:1px solid #34302d;border-radius:999px;font-size:13px;color:#f4f0eb;white-space:nowrap}
+.sparo-button:hover{background:#29211d;border-color:#8e857d}.sparo-button.primary{background:#e4a28b;color:#100f0e;border-color:#e4a28b;min-width:170px}
+.sparo-tag{display:inline-block;border-radius:6px;padding:4px 9px;background:#201d1b;color:#b6ada5;font-size:11px;line-height:17px}
+.sparo-tag.green{background:#1c2d24;color:#a5ccb4}.sparo-tag.copper{background:#35231e;color:#e4a28b}
+.workspace-page{max-width:1520px;margin:auto;padding:20px 40px 64px;display:flex;flex-direction:column;gap:24px}
+.workspace-title{display:flex;align-items:center;justify-content:space-between;gap:24px}
+.workspace-title h1{font-size:32px;line-height:48px;font-weight:500;margin:8px 0}
+.workspace-title p{font-size:14px;color:#b6ada5;line-height:21px}
+.workspace-meta{display:flex;align-items:center;gap:14px;font-size:11px;color:#8e857d}
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.kpi{padding:20px;display:flex;flex-direction:column;gap:10px}.kpi>span{font-size:12px;color:#b6ada5}.kpi strong{font-size:32px;line-height:48px;font-weight:500}.kpi small{font-size:11px;color:#e4a28b}
+.workspace-columns{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);gap:24px;align-items:start}
+.workspace-card{padding:24px;min-width:0}.workspace-card h2{font-size:24px;line-height:36px;margin-top:6px;font-weight:400}.workspace-card h3,.workspace-page>h3{font-size:18px;font-weight:500;line-height:27px}
+.workspace-card p{font-size:12px;color:#b6ada5;line-height:20px}.workspace-card a:not(.sparo-button){font-size:12px;color:#e4a28b}
+.sparo-deal-graph{height:270px;position:relative;margin:20px 0;overflow:hidden}.graph-lines{position:absolute;left:50%;top:0;transform:translateX(-50%);width:642px;height:270px}
+.graph-party{position:absolute;border:1px solid #34302d;background:#171615;border-radius:12px;padding:14px;width:29%;display:flex;flex-direction:column;gap:4px}
+.graph-party strong{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.graph-party small{font-size:10px;color:#b6ada5}.graph-party .sparo-tag{align-self:start}
+.graph-party.buyer{left:0;top:92px}.graph-party.holder{left:35.5%;top:20px}.graph-party.provider{right:0;top:92px}
+.graph-caption{position:absolute;top:230px;width:100%;text-align:center;font:10px var(--font-mono);color:#8e857d}
+.deal-bottom{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.attention-item{padding:20px 0;border-bottom:1px solid #34302d}.attention-item h4{font-size:14px;font-weight:500}.attention-item p{margin:8px 0}
+.section-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.pulse-price{font-size:28px;font-weight:300;margin:20px 0 10px}.workspace-card p.accent{color:#e4a28b;margin:22px 0}
+.workspace-notice{background:#35231e;color:#e4a28b;border-radius:8px;padding:16px;font-size:13px;line-height:22px}
+.workspace-notice small{display:block;color:#b6ada5;font-size:11px;margin-left:24px}
+.market-filters{display:flex;gap:12px;align-items:center;font-size:12px;color:#b6ada5}
+.market-filters input,.market-filters select{background:#100f0e;border:1px solid #34302d;border-radius:999px;padding:12px 18px;color:#f4f0eb}
+.market-filters input{width:260px}.market-filters>span{margin-left:auto}
+.sparo-table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}
+.sparo-table th{background:#201d1b;color:#8e857d;font:10px var(--font-mono);text-transform:uppercase;padding:16px}
+.sparo-table td{padding:20px 16px;border-bottom:1px solid #34302d;color:#b6ada5;max-width:260px;overflow-wrap:anywhere}
+.sparo-table td:first-child{color:#f4f0eb}.sparo-table small{display:block;font:10px var(--font-mono);color:#8e857d;margin-top:8px}.sparo-table a{color:#e4a28b}
+.workspace-tabs{display:flex;gap:24px;padding:12px 0}.workspace-tabs button{font-size:13px;color:#b6ada5;text-transform:capitalize}.workspace-tabs button.active{color:#e4a28b}
+.empty-state{padding:40px;text-align:center;color:#b6ada5;font-size:14px}.empty-state p{margin:12px 0}
+.search-overlay{position:fixed;inset:0;background:#0009;z-index:100;display:flex;justify-content:center;align-items:flex-start;padding-top:18vh}
+.search-dialog{width:620px;background:#171615;border:1px solid #34302d;border-radius:16px;padding:28px;box-shadow:0 30px 100px #0008}
+.search-dialog input{width:100%;padding:14px;border:1px solid #34302d;border-radius:8px;margin:20px 0;background:#100f0e}
+.search-dialog>a{display:flex;justify-content:space-between;padding:14px;border-radius:6px}.search-dialog>a:hover{background:#35231e}
+.landing{position:relative;min-height:880px;overflow:hidden}.landing nav{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:28px 6.4%;font-size:13px}
+.landing-hero{position:relative;z-index:1;text-align:center;padding:165px 0 140px}.landing-hero h1{font-size:64px;line-height:1.12;letter-spacing:-3px;font-weight:400;margin:24px 0}
+.landing-hero p{font-size:18px;line-height:27px;color:#b6ada5}.landing-actions{display:flex;justify-content:center;gap:16px;margin:28px 0}.landing-hero small{font:11px var(--font-mono);color:#8e857d}
+.landing-bottom{position:relative;display:flex;justify-content:space-between;margin:0 6.4%;padding:35px 0;border-bottom:1px solid #34302d;font:11px var(--font-mono);color:#b6ada5}
+.landing-art{position:absolute;inset:0;pointer-events:none}.landing-art i{position:absolute;background:linear-gradient(90deg,transparent,rgba(153,72,61,.35) 35%,rgba(241,171,153,.65) 52%,rgba(139,61,50,.35) 70%,transparent);filter:blur(1.5px)}
