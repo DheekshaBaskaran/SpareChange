@@ -21,6 +21,8 @@ export async function GET() {
     completedAt: job.completedAt,
     executionMode: job.executionMode,
     paymentMode: job.paymentMode,
+    verificationStatus: job.verification?.status ?? "Pending",
+    settlementLabel: job.payment ? (job.payment.paymentMode === "mock" ? "Mock · no funds moved" : "x402 · testnet") : "Not requested",
   }));
   return Response.json({ success: true, jobs });
 }

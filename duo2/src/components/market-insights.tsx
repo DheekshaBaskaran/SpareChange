@@ -1,0 +1,12 @@
+"use client";
+import { useState } from "react";
+import { Panel } from "./ui";
+import { Dialog, display, Evidence, minor, records, ResourceState, useResource } from "./console-ui";
+export function MarketInsights(){
+ const [hours,setHours]=useState("24");const [open,setOpen]=useState(false);
+ const history=useResource("/api/workspace/market/history?gpu_model=A100&window_hours="+hours);
+ const bridge=useResource("/api/workspace/market/bridge");const offers=useResource(open?"/api/workspace/offers":null);
+ const points=records(history.data?.history).slice().reverse();const values=points.map(p=>Number(p.avg_minor));const low=Math.min(...values);const high=Math.max(...values);
+ const coords=values.map((v,i)=>(i*600/Math.max(1,values.length-1))+","+(130-((v-low)/(high-low||1))*110)).join(" ");
+ return <div className="workspace-columns"><Panel className="workspace-card"><div className="section-title"><h3>A100 reference-price history</h3><div className="workspace-tabs">{[["24","24h"],["168","7d"],["720","30d"]].map(([h,label])=><button key={h} className={hours===h?"active":""} onClick={()=>setHours(h)}>{label}</button>)}</div></div><ResourceState error={history.error} loading={!history.data&&history.loading} empty={!!history.data&&!values.length}/>{values.length>0&&<><svg viewBox="0 0 600 150" role="img" aria-label={"Observed A100 average prices from "+minor(low)+" to "+minor(high)} className="price-chart">{[20,60,100,140].map(y=><line key={y} x1="0" x2="600" y1={y} y2={y} stroke="#34302d"/>)}<polyline points={coords} fill="none" stroke="#e4a28b" strokeWidth="2"/></svg><p className="help-text">Observed averages · {minor(low)}–{minor(high)} per GPU-hour · {values.length} observations</p></>}</Panel><Panel className="workspace-card"><h3>Market bridge</h3><ResourceState error={bridge.error} loading={!bridge.data&&bridge.loading}/>{bridge.data&&<Evidence value={bridge.data}/>}<button className="sparo-button" onClick={()=>setOpen(true)}>Inspect provenance</button></Panel>{open&&<Dialog title="Listing provenance" close={()=>setOpen(false)}><p>Public reference listings and provider authorization are distinct. Only authorized inventory is executable.</p><ResourceState error={offers.error} loading={!offers.data&&offers.loading}/>{records(offers.data?.offers).map(o=><details className="identity-card" key={display(o.id)}><summary>{display(o.provider)} · {display(o.gpu_model)}</summary><Evidence value={o}/></details>)}</Dialog>}</div>;
+}

@@ -13,6 +13,7 @@ import {
   getExecutionAuthorization,
   listExecutionAuthorizations,
   getContractsForDeal,
+  getContractById,
 } from "../finance/contracts.js";
 import {
   addInvoiceLine,
@@ -150,6 +151,14 @@ const dismissBody = z.object({
 });
 
 export function registerFinanceRoutes(app: FastifyInstance, db: Db): void {
+  app.get("/v1/contracts/:contractId", async (request) => {
+    const principal = requirePrincipal(request.principal);
+    assertPermission(principal, "finance:read");
+    const { contractId } = parse(contractParam, request.params);
+    const contract = await getContractById(db, contractId);
+    if (!contract) throw new ApiError(404, "contract_not_found", "Contract not found.");
+    return { contract };
+  });
   app.get("/v1/contracts", async (request) => {
     const principal = requirePrincipal(request.principal);
     assertPermission(principal, "finance:read");

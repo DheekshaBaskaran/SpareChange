@@ -21,6 +21,7 @@ import { registerFinanceRoutes } from "./routes/finance.js";
 import { registerHealth } from "./routes/health.js";
 import { registerMarketBridgeRoutes } from "./routes/market-bridge.js";
 import { registerMarketRoutes } from "./routes/market.js";
+import { registerSessionRoutes } from "./routes/session.js";
 
 export interface BuildAppOptions {
   db: Db;
@@ -42,6 +43,7 @@ export function buildApp(options: BuildAppOptions) {
   });
 
   app.decorateRequest("principal", null);
+  registerSessionRoutes(app);
 
   let elastic = options.elastic;
   if (elastic === undefined) {

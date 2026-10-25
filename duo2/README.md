@@ -159,3 +159,24 @@ If pages get stuck on a loading state in dev: stop the server, run `rm -rf .next
 - `npm audit` reports "high" warnings for `zod`, a dependency of the x402 packages (they require zod 3, and every zod 3 release is flagged). It affects validation of very large inputs; the risk for this demo is low, and it will clear when x402 moves to zod 4.
 - Job history is saved to `.data/jobs.json` (gitignored), so it survives restarts. Delete that file to start fresh. A job that was running during a restart is marked FAILED with that reason.
 - The demo workload runs on CPU; the GPU model/count shown is the contracted allocation from the deal. The UI labels the actual executor (`local-process`, `local-docker`, `remote`, or `simulated`).
+
+## Sparo desktop console
+The desktop workspace now includes the full Figma landing page at /welcome,
+participant and financial approval dialogs at /approvals, versioned deal tabs,
+contract-specific execution, invoice and exception details, payables, a trial
+balance and journal export, and market history/provenance.
+
+Observer reads use the existing server-side Relay connection. The workspace
+access menu accepts an existing Relay human or finance credential, validates
+it with GET /v1/session, and stores it in an expiring server-side session.
+The browser receives only an opaque HttpOnly, SameSite=Strict session cookie.
+Sessions are process-local and expire after eight hours; server restarts sign
+users out. For multi-instance hosting, use a shared session store before
+enabling credential sign-in across replicas. No approval uses the agent key.
+Participant approvals derive attested_by from the authenticated identity,
+require typed acknowledgment, and recheck the current terms version.
+Financial requests preserve backend permissions and separation of duties.
+
+The additive GET /v1/contracts/:contractId route exposes the contract read
+already described by the frontend API boundary. Financial writes remain
+subject to the existing Relay rules; no frontend action bypasses an exception.
