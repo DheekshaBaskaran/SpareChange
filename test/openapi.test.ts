@@ -20,7 +20,7 @@ test("OpenAPI declares the expanded contract with unique operation IDs", () => {
       .filter(([method]) => methods.has(method))
       .map(([method, operation]) => ({ method, path, operationId: operation.operationId })),
   );
-  assert.equal(operations.length, 71);
+  assert.equal(operations.length, 73);
   const ids = operations.map((operation) => operation.operationId);
   assert.ok(ids.every(Boolean), "every operation needs an operationId");
   assert.equal(new Set(ids).size, ids.length);
@@ -37,6 +37,8 @@ test("OpenAPI declares the expanded contract with unique operation IDs", () => {
     "ingestDuo2Settlement",
     "ingestDuo2ProviderSettlement",
     "runElasticInvestigation",
+    "getMarketBridgeStatus",
+    "syncMarketBridge",
     "listElasticInvestigations",
     "getElasticInvestigation",
   ]) {

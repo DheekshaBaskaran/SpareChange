@@ -458,3 +458,55 @@ Environment variables (see `services/market-intelligence/.env.example`):
 
 Credentials are read from the environment only. They are never returned by the API, logged, or
 committed.
+
+---
+
+## 8. Duo 1 bridge
+
+Duo 1 (the TypeScript clearing/finance service) never writes the market tables and never reads them
+directly. It mirrors what it needs through this API, so normalization, dedupe, and trust scoring stay
+in one place.
+
+**Direction:** Market Intelligence → Duo 1, read-only.
+
+**What moves:** every offer with `price_available = true` and `freshness = fresh`, paged at
+`limit=200` until `next_cursor` is exhausted.
+
+**Where it lands:** `relay.market_offers` on the same Tiger Data database, as
+`source = 'external_reference'`.
+
+| Market field | `relay.market_offers` column | Note |
+|---|---|---|
+| `provider` | `provider_id` | Deterministic provider party, created on first sight |
+| `gpu_model_normalized` | `gpu_model` | Canonical key, so workload matching stays exact |
+| `gpu_count` | `gpu_count` | |
+| `vram_gb` | `memory_gb` | Per GPU |
+| `price_per_gpu_hour_minor` | `rate_minor_per_gpu_hour` | Already integer minor units |
+| `region` / `country` | `location` | |
+| `expires_at` | `expires_at` | Capped by `MARKET_OFFER_TTL_SECONDS` (live) or `MARKET_ADVERTISED_OFFER_TTL_SECONDS` (advertised) |
+| `gpu_model`, `trust_tier`, `freshness`, `source_url`, … | `metadata` | Display label and provenance for the UI |
+
+**Guarantees**
+
+1. Bridge rows are never `executable`. A public listing is a reference price, not authorized
+   inventory, and the solver's `offer_not_executable` rule still applies to any direct rental.
+2. Offer ids are deterministic (`provider` + `provider_offer_id`), so repeated syncs update price and
+   capacity in place. Price history stays here in `market_observations`; Duo 1 keeps no second copy.
+3. Unpriced capacity is skipped rather than stored as a zero-price offer.
+4. A row's `expires_at` never outlives the bridge TTL, so a listing that stops being published cannot
+   keep influencing a quote.
+5. Sync failures are logged and non-fatal: finance keeps serving the offers it already has.
+
+**Operations**
+
+| Endpoint | Role | Purpose |
+|---|---|---|
+| `GET /v1/market/bridge` | any authenticated principal | Sync status, last result, last error |
+| `POST /v1/market/bridge/sync` | `admin` | Force a pass (the background loop runs every `MARKET_SYNC_INTERVAL_MS`, default 5 min) |
+
+Unset `MARKET_API_URL` to disable the bridge entirely; `GET /v1/market/bridge` then reports
+`{"enabled": false}` and everything else keeps working.
+
+**Known limit:** the solver's baseline picks the cheapest reference offer whose `gpu_count` is at least
+the workload's count, so a 1× listing is not extrapolated to an 8× workload. Non-executable offers do
+not participate in clearing; they only set the comparison price.

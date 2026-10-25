@@ -16,6 +16,18 @@ export interface ElasticConfig {
   disabledReason: string | null;
 }
 
+export interface MarketBridgeConfig {
+  /** Base URL of the Market Intelligence API, e.g. http://127.0.0.1:8099. */
+  apiUrl: string;
+  /** Optional bearer token; only needed for admin endpoints. */
+  token: string | null;
+  offerTtlSeconds: number;
+  advertisedOfferTtlSeconds: number;
+  /** 0 disables the background loop; the manual sync endpoint still works. */
+  syncIntervalMs: number;
+  maxOffers: number;
+}
+
 export interface AppConfig {
   host: string;
   port: number;
@@ -26,6 +38,7 @@ export interface AppConfig {
   allowSimulatedApprovals: boolean;
   timescale: boolean;
   elastic: ElasticConfig | null;
+  market: MarketBridgeConfig | null;
 }
 
 function optional(value: string | undefined): string | null {
@@ -56,6 +69,32 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     allowSimulatedApprovals: env.RELAY_ALLOW_SIMULATED_APPROVALS === "1",
     timescale: env.RELAY_TIMESCALE === "1",
     elastic: loadElasticConfig(env),
+    market: loadMarketBridgeConfig(env),
+  };
+}
+
+/**
+ * The finance solver reads `relay.market_offers`. Market Intelligence stays the
+ * system of record for public listings, so the bridge materializes its fresh
+ * reference offers into that table instead of duplicating the ingestion stack.
+ * Absence of MARKET_API_URL is a supported degraded mode: finance keeps working
+ * with whatever offers are already persisted.
+ */
+export function loadMarketBridgeConfig(env: NodeJS.ProcessEnv): MarketBridgeConfig | null {
+  const apiUrl = optional(env.MARKET_API_URL);
+  if (!apiUrl) return null;
+  return {
+    apiUrl: apiUrl.replace(/\/+$/, ""),
+    token: optional(env.MARKET_API_TOKEN),
+    offerTtlSeconds: positiveInteger(env.MARKET_OFFER_TTL_SECONDS, 900, 60, 86_400),
+    advertisedOfferTtlSeconds: positiveInteger(
+      env.MARKET_ADVERTISED_OFFER_TTL_SECONDS,
+      21_600,
+      300,
+      604_800,
+    ),
+    syncIntervalMs: positiveInteger(env.MARKET_SYNC_INTERVAL_MS, 300_000, 0, 86_400_000),
+    maxOffers: positiveInteger(env.MARKET_SYNC_MAX_OFFERS, 1_000, 1, 20_000),
   };
 }
 

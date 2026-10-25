@@ -7,9 +7,11 @@ test("migrations create the core and finance tables", async (t) => {
   const { db } = await createTestContext();
   t.after(async () => db.close());
 
+  // Duo 1 owns the `relay` schema on the shared Tiger database; `public` holds
+  // the Market Intelligence tables. See src/db/schema.ts.
   const tables = await db.query<{ table_name: string }>(
     `SELECT table_name FROM information_schema.tables
-     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`,
+     WHERE table_schema = 'relay' AND table_type = 'BASE TABLE'`,
   );
   const names = new Set(tables.rows.map((row) => row.table_name));
   for (const expected of [
@@ -57,7 +59,7 @@ test("migrations create the core and finance tables", async (t) => {
 
   const view = await db.query<{ table_name: string }>(
     `SELECT table_name FROM information_schema.views
-     WHERE table_schema = 'public' AND table_name = 'journal_entry_balances'`,
+     WHERE table_schema = 'relay' AND table_name = 'journal_entry_balances'`,
   );
   assert.equal(view.rows.length, 1);
 });

@@ -1244,6 +1244,99 @@
             }
           }
         ]
+      },
+      "MarketBridgeSyncResult": {
+        "type": "object",
+        "required": [
+          "started_at",
+          "finished_at",
+          "fetched",
+          "upserted",
+          "skipped"
+        ],
+        "properties": {
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "duration_ms": {
+            "type": "integer"
+          },
+          "fetched": {
+            "type": "integer",
+            "description": "Offers returned by the market API."
+          },
+          "upserted": {
+            "type": "integer",
+            "description": "Rows written to relay.market_offers."
+          },
+          "skipped": {
+            "type": "integer",
+            "description": "Offers without a usable per-GPU price."
+          },
+          "providers": {
+            "type": "integer"
+          },
+          "expired": {
+            "type": "integer",
+            "description": "Bridge rows already past expires_at."
+          },
+          "pages": {
+            "type": "integer"
+          }
+        }
+      },
+      "MarketBridgeHealth": {
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Present only when the bridge is disabled."
+          },
+          "api_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "syncing": {
+            "type": "boolean"
+          },
+          "interval_ms": {
+            "type": "integer"
+          },
+          "last_sync_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_success_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_result": {
+            "$ref": "#/components/schemas/MarketBridgeSyncResult"
+          }
+        }
       }
     },
     "responses": {
@@ -5606,6 +5699,75 @@
           },
           "503": {
             "description": "Elastic is not configured."
+          }
+        }
+      }
+    },
+    "/v1/market/bridge": {
+      "get": {
+        "tags": [
+          "Market"
+        ],
+        "operationId": "getMarketBridgeStatus",
+        "summary": "Market Intelligence bridge status",
+        "description": "Reports whether Duo 1 mirrors Market Intelligence offers, the last sync result, and the last error. Returns `{enabled: false}` when MARKET_API_URL is unset; finance keeps working in that mode.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bridge status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketBridgeHealth"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/v1/market/bridge/sync": {
+      "post": {
+        "tags": [
+          "Market"
+        ],
+        "operationId": "syncMarketBridge",
+        "summary": "Force a Market Intelligence sync",
+        "description": "Runs one read-only mirror pass over the market API. Admin only. The background loop already runs every MARKET_SYNC_INTERVAL_MS.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ContractHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sync result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketBridgeSyncResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
           }
         }
       }

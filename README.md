@@ -6,9 +6,9 @@ It does **not** implement partner-owned Apify ingestion, Tiger Data provisioning
 
 ## Current status
 
-- **47/47 local tests pass** against embedded Postgres (PGlite), including generalized conditional chains, two- and three-move cycles, uneconomic chain/cycle refusals, the full approval → execution → verified usage → invoice discrepancy → CREAO investigation → blocked payment → correction → test settlement → ledger reconciliation workflow, provider payouts, payout failure recovery, Elastic outbox projection, evidence-citation validation, Agent Builder bootstrap, and the Elastic HTTP wire contract.
+- **49/49 local tests pass** against embedded Postgres (PGlite), including generalized conditional chains, two- and three-move cycles, uneconomic chain/cycle refusals, the full approval → execution → verified usage → invoice discrepancy → CREAO investigation → blocked payment → correction → test settlement → ledger reconciliation workflow, provider payouts, payout failure recovery, Elastic outbox projection, evidence-citation validation, Agent Builder bootstrap, the Elastic HTTP wire contract, and the Market Intelligence bridge.
 - Typecheck and production build are clean.
-- The machine-readable contract has **71 operations**; the 14 operations used by the existing hosted CREAO Deal Coordinator remain preserved.
+- The machine-readable contract has **73 operations**; the 14 operations used by the existing hosted CREAO Deal Coordinator remain preserved.
 - Live Tiger Data, public hosting, hosted CREAO access, an Elasticsearch Serverless project, real workers, and Duo 2 settlement credentials are external integration dependencies. Missing credentials do not block local development; the finance backend remains operational without Elastic.
 
 ## Quick start
@@ -18,13 +18,15 @@ Requirements: Node 20.11+, Postgres/Tiger Data for the running server.
 ```bash
 npm install
 cp .env.example .env
-# Set DATABASE_URL and RELAY_API_KEY in .env
+# Set DATABASE_URL, MIGRATION_DATABASE_URL, and RELAY_API_KEY in .env
 
-npm run db:migrate           # core + finance + P1-P5 + provider payouts
+npm run db:migrate           # core + finance + P1-P5 + provider payouts + runtime grants
 npm run db:migrate:timescale # optional: Timescale hypertable on Tiger Data
 npm run db:seed              # demo parties, offers, allocation, fixture deal
 npm run dev                  # http://localhost:4000
 ```
+
+Duo 1 and Market Intelligence can share one Tiger Data database. Duo 1 keeps its tables in the `relay` schema and reads Market Intelligence's `public` tables only through the market API, so `DATABASE_URL` is the same value for both services while `MIGRATION_DATABASE_URL` stays with the owner role. When the Python market API is already listening on `:8099`, set `MARKET_API_URL=http://127.0.0.1:8099` and Duo 1 mirrors fresh public offers for solver baselines (see [docs/MARKET_INTELLIGENCE_INTERFACE.md](docs/MARKET_INTELLIGENCE_INTERFACE.md#8-duo-1-bridge)).
 
 Optional Elasticsearch investigation layer:
 
@@ -93,7 +95,7 @@ Every move is checked against provider authorization/transferability, compatibil
 
 ## Main API groups
 
-The authoritative machine-readable contract is [contracts/relay-duo1.v1.openapi.json](contracts/relay-duo1.v1.openapi.json) (71 operations). Key paths:
+The authoritative machine-readable contract is [contracts/relay-duo1.v1.openapi.json](contracts/relay-duo1.v1.openapi.json) (73 operations). Key paths:
 
 - Clearing: `POST /v1/deals/search`, `GET /v1/deals/{id}`, `POST /v1/deals/{id}/counteroffers`, `POST /v1/deals/{id}/handoff`
 - Negotiation mandates: `GET|POST /v1/negotiation-mandates`

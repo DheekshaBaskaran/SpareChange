@@ -1,7 +1,38 @@
 import pg from "pg";
 import type { Pool as PgPool, PoolClient, QueryResultRow } from "pg";
+import { SEARCH_PATH_OPTION } from "./schema.js";
 
 const { Pool } = pg;
+
+/**
+ * Tiger Data hands out `sslmode=require`, which in libpq means "encrypt, but do
+ * not validate the CA". node-postgres parses the URL after the explicit config
+ * (pg/lib/connection-parameters.js), so `sslmode=require` overwrites `ssl` with
+ * `true` and then fails against Tiger's managed CA. Strip that one parameter and
+ * pass the equivalent SSL options, so both services read the same URL and behave
+ * the same way. `verify-full` keeps full validation.
+ */
+function pgOptions(connectionString: string): {
+  connectionString: string;
+  ssl?: false | { rejectUnauthorized: boolean };
+} {
+  let url: URL;
+  try {
+    url = new URL(connectionString);
+  } catch {
+    return { connectionString };
+  }
+  const mode = url.searchParams.get("sslmode");
+  if (mode === "disable") {
+    url.searchParams.delete("sslmode");
+    return { connectionString: url.toString(), ssl: false };
+  }
+  if (mode === "require" || mode === "prefer" || mode === "allow" || mode === "no-verify") {
+    url.searchParams.delete("sslmode");
+    return { connectionString: url.toString(), ssl: { rejectUnauthorized: false } };
+  }
+  return { connectionString };
+}
 
 export interface QueryResult<T> {
   rows: T[];
@@ -27,11 +58,15 @@ export class PgDb implements Db {
 
   constructor(connectionString: string) {
     this.pool = new Pool({
-      connectionString,
+      ...pgOptions(connectionString),
       max: 10,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,
       application_name: "relay-duo1",
+      // Applied by the server at connect time, so every pooled connection
+      // resolves Duo 1 tables in `relay` and falls back to `public` for the
+      // market tables and extensions.
+      options: SEARCH_PATH_OPTION,
     });
   }
 

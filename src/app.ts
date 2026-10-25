@@ -10,6 +10,7 @@ import { ElasticHttpClient } from "./elastic/client.js";
 import { ElasticFinanceIntegration } from "./elastic/investigations.js";
 import { ElasticSyncService } from "./elastic/sync.js";
 import type { ElasticInvestigationService } from "./elastic/types.js";
+import { MarketSyncService } from "./market/sync.js";
 import { registerApprovalRoutes } from "./routes/approvals.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerCreaoRoutes } from "./routes/creao.js";
@@ -18,6 +19,7 @@ import { registerDuo2Routes } from "./routes/duo2.js";
 import { registerElasticRoutes } from "./routes/elastic.js";
 import { registerFinanceRoutes } from "./routes/finance.js";
 import { registerHealth } from "./routes/health.js";
+import { registerMarketBridgeRoutes } from "./routes/market-bridge.js";
 import { registerMarketRoutes } from "./routes/market.js";
 
 export interface BuildAppOptions {
@@ -64,6 +66,17 @@ export function buildApp(options: BuildAppOptions) {
     }
   }
   if (elastic && options.config.elastic?.enabled) elastic.start?.();
+
+  let marketSync: MarketSyncService | null = null;
+  if (options.config.market) {
+    marketSync = new MarketSyncService(
+      options.db,
+      options.config.market,
+      (error) => app.log.error({ err: error }, "market intelligence sync failed"),
+    );
+    // Boot-time failures are logged, never fatal: finance must keep serving.
+    marketSync.start();
+  }
 
   app.addHook("onRequest", async (request, reply) => {
     reply.header("X-Relay-Contract", CONTRACT_VERSION);
@@ -154,6 +167,7 @@ export function buildApp(options: BuildAppOptions) {
 
   registerHealth(app, options.db);
   registerMarketRoutes(app, options.db);
+  registerMarketBridgeRoutes(app, options.db, marketSync);
   registerDealRoutes(app, options.db);
   registerApprovalRoutes(app, options.db, options.config);
   registerFinanceRoutes(app, options.db);
@@ -164,6 +178,7 @@ export function buildApp(options: BuildAppOptions) {
 
   app.addHook("onClose", async () => {
     elastic?.stop?.();
+    marketSync?.stop();
     await options.db.close();
   });
 

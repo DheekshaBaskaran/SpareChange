@@ -1,6 +1,6 @@
 import { upsertApiKey } from "../../src/auth/keys.js";
 import { buildApp } from "../../src/app.js";
-import type { AppConfig } from "../../src/config.js";
+import type { AppConfig, MarketBridgeConfig } from "../../src/config.js";
 import { CONTRACT_VERSION } from "../../src/contract.js";
 import { runMigrations } from "../../src/db/migrate.js";
 import { DEMO_IDS, seedDemo } from "../../src/db/seed-demo.js";
@@ -27,6 +27,7 @@ export const TEST_HUMANS = {
 
 export async function createTestContext(options: {
   elasticFactory?: (db: Db) => ElasticInvestigationService;
+  market?: MarketBridgeConfig | null;
 } = {}) {
   const db = new PGliteDb();
   await runMigrations(db);
@@ -82,6 +83,7 @@ export async function createTestContext(options: {
     allowSimulatedApprovals: false,
     timescale: false,
     elastic: null,
+    market: options.market ?? null,
   };
   const app = buildApp({
     db,

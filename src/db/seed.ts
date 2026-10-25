@@ -10,8 +10,9 @@ try {
 }
 
 async function main(): Promise<void> {
-  const databaseUrl = process.env.DATABASE_URL?.trim();
-  if (!databaseUrl) throw new Error("DATABASE_URL is required.");
+  // Seeding runs migrations, so prefer the owner role when it is configured.
+  const databaseUrl = process.env.MIGRATION_DATABASE_URL?.trim() || process.env.DATABASE_URL?.trim();
+  if (!databaseUrl) throw new Error("MIGRATION_DATABASE_URL or DATABASE_URL is required.");
 
   const db = new PgDb(databaseUrl);
   try {
