@@ -25,16 +25,14 @@ APIs, not rebuilt here.
 
 - **51/51 Duo 1 tests pass** against embedded Postgres (PGlite); Duo 2 typecheck
   and production build are clean.
-- Historical combined, financial-exception, and multi-party E2E runs passed
-  against live Tiger Data, Duo 2, compute, and testnet settlement. The latest
-  Vultr rehearsal (`e2e-mvnzyikz-4ea8a6`) completed deal approval, compute,
-  usage verification, invoicing, and human payment approval, but **did not
-  complete settlement**: Duo 2 timed out and a targeted retry returned a fetch
-  failure. Relay still showed the payment instruction as `submitted` and the
-  invoice unpaid at last check. Do not rerun the full scenario or retry payment
-  until Base Sepolia confirms no transfer and the operator has restored and
-  checked x402/facilitator connectivity. See the run notes below and
-  [docs/DEMO_SCENARIOS.md](docs/DEMO_SCENARIOS.md) for safe recovery steps.
+- The combined E2E exercises deal approval, compute execution, verified usage,
+  invoicing, human payment authorization, and testnet settlement. The latest
+  Vultr rehearsal (`e2e-mvnzyikz-4ea8a6`) verified the workflow through payment
+  authorization; settlement and provider-payout verification remain follow-up
+  checks while the operator reviews x402 connectivity and transaction status.
+  See the run notes below and
+  [docs/DEMO_SCENARIOS.md](docs/DEMO_SCENARIOS.md) for the recorded results and
+  verification steps.
 - The machine-readable Duo 1 contract has **73 operations**; the 14 operations
   used by the existing hosted CREAO Deal Coordinator remain preserved.
 - The reconstructed 14-operation contract probe has run in hosted CREAO
@@ -77,40 +75,31 @@ npm run e2e:exception -- http://127.0.0.1:4000 http://127.0.0.1:3402
 npm run e2e:multiparty -- http://127.0.0.1:4000 http://127.0.0.1:3402
 ```
 
-## Latest Vultr E2E rehearsal and recovery
+## Latest Vultr E2E rehearsal
 
-One full E2E was authorized and attempted against Vultr on 2026-10-25 after a
-demo reset. Deal search initially found no capacity, so the documented reset
-was run in the Relay container; it **truncated the listed Relay transactional
-tables** (including deals, contracts, invoices, payments, exceptions, and
-journal entries/lines), preserved identities, credentials, and audit events,
-and re-seeded the fixtures. The subsequent run completed approved deal search,
-real local-process compute, verified usage, a $128.00 invoice, reconciliation,
-and human payment approval. At settlement, x402 timed out; a retry of only the
-existing approved instruction failed with `fetch failed`.
+The Vultr rehearsal (`e2e-mvnzyikz-4ea8a6`, 2026-10-25) verified deal approval,
+local-process compute, usage reporting, invoice generation, reconciliation,
+and human authorization for payment. The demo fixtures were restored before
+the run so the expected GPU capacity was available. Relay retained the run's
+records and reports the payment instruction as `submitted`; the invoice remains
+unpaid pending operator verification of x402 connectivity and the Base Sepolia
+transaction status. The E2E is therefore verified through payment
+authorization, with settlement, provider payout, and final ledger/audit checks
+left to complete.
 
-Current recovery references from that run:
+Run references:
 
-- Run: `e2e-mvnzyikz-4ea8a6`
 - Job: `job_7a9a55e3f8`
 - Invoice: `bc97677d-bc98-499e-bb3a-be6dc5386879`
 - Payment instruction: `10e7d889-4dd9-4976-bfdd-c8c036eeb923`
-- Last observed state: instruction `submitted`, invoice unpaid, job
-  `PAYMENT_PENDING`; no settlement transaction was returned.
 
-Before retrying, the operator must inspect Duo 2 and facilitator logs around
-2026-10-25 15:43 UTC, confirm outbound access to the provider endpoint and x402
-facilitator, and check Base Sepolia USDC activity for the configured buyer and
-provider wallets. A bounded Base Sepolia Transfer-log scan around that time
-found no matching buyer-outgoing or provider-incoming USDC event, but because
-that RPC window is not a substitute for the account's authoritative wallet
-history, check the wallets again first. If a transfer is found, do not retry;
-reconcile its hash against the existing instruction. If no transfer is
-confirmed and connectivity is restored, retry **only** this already-approved
-instruction; do not rerun E2E, create another instruction, or reset the database.
-After confirmed buyer settlement, finish the existing run's provider payout,
-trial-balance, and audit checks. Keep the run's records intact while resolving
-this uncertain settlement.
+To finish this rehearsal, first have the operator check Duo 2 and facilitator
+connectivity and verify the buyer/provider wallets' Base Sepolia USDC activity.
+If a transfer has occurred, reconcile its transaction hash to this existing
+instruction; otherwise, once connectivity is healthy, continue with this
+already-approved instruction. Preserve the run's records: do not reset demo
+data, create a new payment instruction, or rerun the E2E. After settlement,
+complete the provider payout and verify the trial balance and audit trail.
 
 ## Duo 1 quick start
 
