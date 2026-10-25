@@ -223,6 +223,12 @@ Validated locally:
 - Duo 2 image smoke test: `/api/health` returned 200, a real `local-process`
   job completed with exit 0 and `VERIFIED`, and the job survived a container
   restart on the `duo2_data` volume. ✅
+- `docker compose build` builds `api`, `duo1`, and `duo2` successfully. ✅
+- Full Compose stack (without Caddy) started against live Tiger Data with the
+  per-service allowlists: all three containers healthy; market `/readyz`
+  reported `tiger_data: ok`; Duo 2 reported `relayConfigured: true`,
+  `paymentMode: "x402"`, and a funded Solana payer; `/api/deals` returned 1
+  deal and `/api/market` returned 4 listings with `duo1-live`. ✅
 - `caddy validate` accepts the three-site Caddyfile with placeholder domains. ✅
 
 Not validated: full Compose stack behind Caddy (needs real domains/TLS),
