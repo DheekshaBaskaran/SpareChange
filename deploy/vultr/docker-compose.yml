@@ -55,6 +55,50 @@ services:
         max-size: "20m"
         max-file: "5"
 
+  # Duo 2 — SpareChange execution console, job manager and payment rail.
+  duo2:
+    build:
+      context: ../../duo2
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # PORT from the shared .env is Duo 1's; finish on Duo 2's own port.
+      PORT: "3402"
+      HOSTNAME: 0.0.0.0
+      # Real compute runs as a local worker process: Docker-in-Docker is not
+      # available inside the container, and the UI labels the executor it used.
+      EXECUTION_MODE: local-process
+      # Relay is the system of record: deals, authorization, usage and payment.
+      DUO1_API_URL: http://duo1:4000
+      DUO1_AGENT_API_KEY: ${RELAY_API_KEY:?set RELAY_API_KEY in .env}
+      DUO1_WORKER_API_KEY: ${DUO2_WORKER_API_KEY:?set DUO2_WORKER_API_KEY in .env}
+      DUO2_INTERNAL_TOKEN: ${DUO2_INTERNAL_TOKEN:-}
+      APP_BASE_URL: https://${DUO2_DOMAIN:?set DUO2_DOMAIN in .env}
+    expose:
+      - "3402"
+    volumes:
+      - duo2_data:/app/.data
+    depends_on:
+      duo1:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3402/api/system').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
   caddy:
     image: caddy:2
     restart: unless-stopped
@@ -63,9 +107,12 @@ services:
         condition: service_healthy
       duo1:
         condition: service_healthy
+      duo2:
+        condition: service_healthy
     environment:
       MARKET_DOMAIN: ${MARKET_DOMAIN:?set MARKET_DOMAIN in .env}
       DUO1_DOMAIN: ${DUO1_DOMAIN:?set DUO1_DOMAIN in .env}
+      DUO2_DOMAIN: ${DUO2_DOMAIN:?set DUO2_DOMAIN in .env}
     ports:
       - "80:80"
       - "443:443"
@@ -83,3 +130,4 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  duo2_data:

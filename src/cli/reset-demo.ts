@@ -127,11 +127,30 @@ async function main(): Promise<void> {
     console.log(`Resetting ${DUO1_SCHEMA} transactions on ${describe(url)}`);
     for (const row of before) console.log(`  before  ${row.table_name}: ${row.rows}`);
 
-    await db.transaction(async (tx) => {
-      await tx.exec(
-        `TRUNCATE TABLE ${TRANSACTIONAL_TABLES.map((table) => `${DUO1_SCHEMA}.${table}`).join(", ")} CASCADE`,
-      );
-    });
+    await db
+      .transaction(async (tx) => {
+        // A half-finished reset from a killed client can leave another truncate
+        // holding AccessExclusiveLock. Fail with a clear timeout instead of
+        // hanging forever.
+        await tx.exec("SET LOCAL lock_timeout = '15s'");
+        await tx.exec("SET LOCAL statement_timeout = '120s'");
+        await tx.exec(
+          `TRUNCATE TABLE ${TRANSACTIONAL_TABLES.map((table) => `${DUO1_SCHEMA}.${table}`).join(", ")} CASCADE`,
+        );
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!/lock timeout/i.test(message)) throw error;
+        throw new Error(
+          `Could not lock the demo tables: ${message}`,
+          {
+            cause: new Error(
+              "Another session holds a lock, usually an `idle in transaction` client left behind by a killed process. " +
+                "Terminate it (pg_terminate_backend) or wait for it to disconnect, then retry.",
+            ),
+          },
+        );
+      });
     await seedDemo(db);
     console.log("Demo fixtures re-seeded (parties, offers, workloads, capacity, spending limits).");
 

@@ -68,6 +68,13 @@ export class PgDb implements Db {
       // market tables and extensions.
       options: SEARCH_PATH_OPTION,
     });
+    // Idle pooled connections can be reset by the server or a managed network
+    // (Tiger does this on maintenance). Without a listener that is an unhandled
+    // 'error' event and it terminates the whole API, so absorb and log it; the
+    // pool discards the dead client and the next query reconnects.
+    this.pool.on("error", (error: Error) => {
+      console.error(`database pool error: ${error.message}`);
+    });
   }
 
   async query<T extends QueryResultRow = QueryResultRow>(

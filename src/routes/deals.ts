@@ -144,6 +144,34 @@ export function registerDealRoutes(app: FastifyInstance, db: Db): void {
     });
   });
 
+  // Read-only listing used by the Duo 2 execution console to discover deals
+  // that are cleared and approved. It returns the same shape as the detail
+  // route so a consumer never has to guess which fields are available.
+  app.get("/v1/deals", async (request) => {
+    const principal = requirePrincipal(request.principal);
+    assertPermission(principal, "deal:read");
+    const query = parse(
+      z.object({
+        status: z.string().trim().min(1).max(40).optional(),
+        limit: z.coerce.number().int().min(1).max(50).optional(),
+      }),
+      request.query,
+    );
+    const result = await db.query<{ id: string }>(
+      `SELECT id FROM deals
+       WHERE ($1::text IS NULL OR status = $1)
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [query.status ?? null, query.limit ?? 20],
+    );
+    const deals = [];
+    for (const row of result.rows) {
+      const deal = await getDeal(db, row.id);
+      if (deal) deals.push(deal);
+    }
+    return { deals };
+  });
+
   app.get("/v1/deals/:dealId", async (request) => {
     const principal = requirePrincipal(request.principal);
     assertPermission(principal, "deal:read");

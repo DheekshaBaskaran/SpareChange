@@ -20,7 +20,8 @@
     "key:create": "tsx src/cli/create-api-key.ts",
     "elastic:bootstrap": "tsx src/cli/elastic-bootstrap.ts",
     "elastic:reindex": "tsx src/cli/elastic-reindex.ts",
-    "smoke": "tsx scripts/smoke-duo1.ts"
+    "smoke": "tsx scripts/smoke-duo1.ts",
+    "e2e": "tsx scripts/e2e-combined.ts"
   },
   "dependencies": {
     "fastify": "^5.0.0",
