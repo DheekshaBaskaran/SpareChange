@@ -33,9 +33,11 @@ APIs, not rebuilt here.
   `npm run db:reset-demo -- --confirm`.
 - The machine-readable Duo 1 contract has **73 operations**; the 14 operations
   used by the existing hosted CREAO Deal Coordinator remain preserved.
-- Hosted CREAO has not yet been exercised against a public Relay. That remains
-  blocked on a public HTTPS host and CREAO-side credentials; local runs prove
-  the Relay half only.
+- The reconstructed 14-operation contract probe has run in hosted CREAO
+  against the public Relay: **14/14**. The existing Relay Deal Coordinator app
+  has not yet produced a non-empty hosted run; all app-scoped runs are empty.
+  Local E2E proves the full transaction workflow. See
+  [docs/SUBMISSION_STATUS.md](docs/SUBMISSION_STATUS.md).
 - Live Tiger Data, public hosting, hosted CREAO access, an Elasticsearch
   Serverless project, real workers, and settlement credentials are external
   integration dependencies. Missing credentials do not block local development;

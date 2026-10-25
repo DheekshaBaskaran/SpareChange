@@ -1,0 +1,73 @@
+=== typecheck ===
+
+> relay-duo1@0.1.0 typecheck
+> tsc --noEmit
+
+=== test ===
+
+> relay-duo1@0.1.0 test
+> node --import tsx --test test/*.test.ts
+
+✔ agents cannot record participant approvals (3386.6333ms)
+✔ attestation mismatch and simulated approvals are rejected (1020.0972ms)
+✔ all four human approvals permit a provisional, non-settling handoff (819.6833ms)
+✔ a version bump invalidates an old approval request (755.6781ms)
+✔ approval request creation is persisted and duplicate-safe (622.8823ms)
+✔ health is public and reports database readiness (3374.463ms)
+✔ contract header and bearer auth are enforced before handlers (866.8282ms)
+✔ read endpoints return persisted contract data (777.5045ms)
+✔ unknown routes return the contract error envelope (783.2273ms)
+✔ the hosted agent's 14 preserved operations remain contract-compatible (0.6159ms)
+✔ the preserved deal-coordinator workflow is reachable and returns the expected shapes (3618.1187ms)
+✔ bootstrap creates the scoped index, tools, and Relay Financial Investigator agent (102.4467ms)
+✔ the Elastic client writes, reads, and invokes Agent Builder with the documented wire shapes (111.5141ms)
+✔ Elastic HTTP errors preserve status, error type, and retryability (14.8519ms)
+✔ finance writes enter the outbox and are projected incrementally (3387.1037ms)
+✔ agreement, invoice, execution, settlement, ledger, and audit records share identifiers (1037.2852ms)
+✔ the investigator keeps only citations that match indexed records (872.5868ms)
+✔ an unconfigured investigator returns 503 and leaves the exception open (714.0802ms)
+✔ an agent outage records a failed investigation and leaves the exception open (629.3129ms)
+✔ unsupported citations become insufficient evidence and leave the exception unresolved (486.2603ms)
+✔ a model quota rejection is reported as a rate limit, not an outage (518.0329ms)
+✔ verified usage becomes invoices, payables, and a balanced ledger (3712.872ms)
+✔ provider payable is authorized, paid through Duo 2, and reconciled (1222.9317ms)
+✔ a failed provider payout blocks retry until the exception is cleared (1084.8066ms)
+✔ duplicate invoices are detected separately from the usage charge (762.559ms)
+✔ overbilling is investigated, corrected on approval, and settled with a balanced audit trail (782.4026ms)
+✔ negotiation events replay an identical idempotent request (3417.364ms)
+✔ solver writes are idempotent and agent counteroffers stay governed (1016.9984ms)
+✔ handoff is blocked while approvals are outstanding (749.9598ms)
+✔ escalation persists and moves the deal to escalated (766.51ms)
+✔ market bridge mirrors fresh public offers as non-executable references (3454.7583ms)
+✔ market bridge reports disabled when MARKET_API_URL is unset (959.6078ms)
+✔ OpenAPI declares the expanded contract with unique operation IDs (0.8923ms)
+✔ every declared OpenAPI operation is registered in the Fastify app (3356.0256ms)
+✔ every write operation requires an idempotency key and contract header (0.6553ms)
+✔ a failed settlement creates an exception, blocks retry, and recovers after dismissal (3866.0823ms)
+✔ agents cannot request payments or read audit without explicit permission (1057.7726ms)
+✔ migrations create the core and finance tables (3397.6709ms)
+✔ journal lines can be read as balanced without trusting a flag (902.0371ms)
+✔ general chain relocates two displaced workloads and reports its conditional economics (29.4341ms)
+✔ a chain with uneconomic switching is rejected without hiding the direct fallback (2.7639ms)
+✔ a closed cycle uses the target's released anchor allocation as the terminal slot (3.5367ms)
+✔ a three-move closed cycle rotates every held slot through the target anchor (1.9829ms)
+✔ an uneconomic closed cycle is rejected with the aggregate surplus violation (0.8552ms)
+✔ a single-GPU market observation prices a multi-GPU baseline (0.9356ms)
+✔ a cycle is not fabricated when the target has no anchor allocation (1.0313ms)
+✔ solver finds a conditional exchange for capacity held by another buyer (3427.2476ms)
+✔ solver rejects a deal that cannot clear the buyer mandate (935.8036ms)
+✔ a hosted agent negotiates only inside a participant mandate (752.7927ms)
+✔ an economically infeasible counteroffer returns the hosted-agent error code (809.0975ms)
+✔ agent counteroffers require a mandate and human providers can reprice (673.7157ms)
+ℹ tests 51
+ℹ suites 0
+ℹ pass 51
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8669.9407
+=== build ===
+
+> relay-duo1@0.1.0 build
+> tsc -p tsconfig.build.json

@@ -1,0 +1,128 @@
+=== reset ===
+
+> relay-duo1@0.1.0 db:reset-demo
+> tsx src/cli/reset-demo.ts --confirm
+
+Resetting relay transactions on n1wjza6w7z.r8yzbd2r78.tsdb.cloud.timescale.com:32105/tsdb
+  before  elastic_outbox: 117
+  before  reconciliation_matches: 18
+  before  journal_lines: 16
+  before  elastic_sync_runs: 14
+  before  deal_approval_requests: 14
+  before  journal_entries: 8
+  before  deal_versions: 4
+  before  agent_work_items: 4
+  before  deals: 4
+  before  financial_approvals: 3
+  before  exception_actions: 3
+  before  reconciliation_runs: 3
+  before  invoice_lines: 2
+  before  approvals: 2
+  before  negotiation_events: 2
+  before  escalations: 2
+  before  capacity_allocations: 2
+  before  billing_calculations: 1
+  before  payment_obligations: 1
+  before  payment_instructions: 1
+  before  payments: 1
+  before  verified_usage: 1
+  before  contract_rate_lines: 1
+  before  contracts: 1
+  before  execution_events: 1
+  before  financial_exceptions: 1
+  before  handoffs: 1
+  before  elastic_investigations: 1
+  before  provider_payouts: 1
+  before  execution_authorizations: 1
+  before  provider_payables: 1
+  before  invoice_adjustments: 1
+  before  provider_payout_instructions: 1
+  before  invoices: 1
+Demo fixtures re-seeded (parties, offers, workloads, capacity, spending limits).
+=== e2e ===
+
+> relay-duo1@0.1.0 e2e
+> tsx scripts/e2e-combined.ts http://127.0.0.1:4000 http://127.0.0.1:3402
+
+combined end-to-end run e2e-mvnycxvq-c417c8
+  relay: http://127.0.0.1:4000
+  duo2 : http://127.0.0.1:3402
+
+PASS  relay health — HTTP 200
+PASS  duo2 system — HTTP 200
+PASS  duo2 relay link — http://127.0.0.1:4000 · rail relay
+PASS  deal search — HTTP 201
+      deal 6a1e92db-e903-4ad2-9355-cd77373fe017 — Direct rental of 8x H100 from Northstar GPU for Acme Compute
+      baseline 224.00 USD (Cheapest observed market rate: Vertex Labs at 280 minor/GPU-hour (8x H100 observed 2026-10-25T14:48:10.873Z). Not confirmed inventory.)
+      direct   128.00 USD — savings 86.00 USD after 10.00 USD fee
+PASS  approve Acme Compute — 128.00 USD
+PASS  approve Northstar GPU — 0.00 USD
+      handing 8x H100 for 10h to Duo 2 (128.00 USD)
+PASS  duo2 accepted the deal — HTTP 201
+      job job_20b6dbf777 status PROVISIONING
+PASS  compute verified, usage reported — local-docker · accuracy 0.973
+      executor local-docker, runtime 7277ms, exit 0
+      verification VERIFIED (5 checks)
+      relay contract 51659f16-ed9a-4b30-a35e-3393a278c620, usage dabc9c04-c847-417d-b7db-93b8c7777d05, amount 128.00 USD
+PASS  relay authorization exists — HTTP 200
+PASS  contract under Relay authorization — 51659f16-ed9a-4b30-a35e-3393a278c620 (1 contract(s))
+PASS  relay recorded verified usage — HTTP 200
+      usage dabc9c04-c847-417d-b7db-93b8c7777d05: 288000 contracted GPU-seconds on contract 51659f16-ed9a-4b30-a35e-3393a278c620
+      basis contracted_capacity_window; worker-measured 56 GPU-seconds (7277ms runtime)
+PASS  invoice issued from verified usage — 128.00 USD
+PASS  reconciliation — HTTP 201
+PASS  payment requested — HTTP 202
+PASS  finance cannot approve its own payment — HTTP 403
+PASS  human approves payment — HTTP 200
+PASS  duo2 settled the instruction — HTTP 200
+      rail x402 (real transfer) · tx 0x529f2d1a8588e5e2e6ece7cde4b57b8ecc06b0e4eb048b1afe19f89c9a0fa62f
+      network eip155:84532 · on-chain 0.01 USDC (testnet, scaled down from the deal value)
+PASS  real on-chain settlement — 0x529f2d1a8588e5e2e6ece7cde4b57b8ecc06b0e4eb048b1afe19f89c9a0fa62f on eip155:84532
+PASS  duplicate settlement request is idempotent — HTTP 200
+PASS  invoice paid — HTTP 200
+PASS  duo2 job complete — HTTP 200
+      duo2 payment x402 · 0x529f2d1a8588e5e2e6ece7cde4b57b8ecc06b0e4eb048b1afe19f89c9a0fa62f · 0.01 USDC (testnet, scaled down from the deal value)
+PASS  provider payables — HTTP 200
+      solana payout rail ready: zYf9msGnh6so38hmYqAXRcTooF37jeP45BWUW92SHCB on solana-devnet
+PASS  provider payout requested — HTTP 202
+PASS  human approves payout — HTTP 200
+PASS  provider payout sent on Solana Devnet — HTTP 200
+      sol 0.01 (10000000 lamports) → zYf9msGnh6so38hmYqAXRcTooF37jeP45BWUW92SHCB · sig 3LaDnmgfaKvyRSXiigQcmms5Eztfwvhpmmd16qt9y1yBrkngZdCDmSf6FbNPPQm7zLBGZnf6wskWie1yrurAeSca
+      explorer https://explorer.solana.com/tx/3LaDnmgfaKvyRSXiigQcmms5Eztfwvhpmmd16qt9y1yBrkngZdCDmSf6FbNPPQm7zLBGZnf6wskWie1yrurAeSca?cluster=devnet
+PASS  independent Solana confirmation — slot 515007992 · 10000000 lamports received
+PASS  duplicate payout request is idempotent — HTTP 200
+PASS  final reconciliation — HTTP 201
+PASS  trial balance — HTTP 200
+      ledger balanced: debit 492.00 USD = credit 492.00 USD
+PASS  audit trail — HTTP 200
+PASS  audit names the settlement transaction — 0x529f2d1a8588e5e2e6ece7cde4b57b8ecc06b0e4eb048b1afe19f89c9a0fa62f · 128.00 USD
+PASS  audit trail complete — 400 events
+
+SUMMARY {
+  "run": "e2e-mvnycxvq-c417c8",
+  "deal_id": "6a1e92db-e903-4ad2-9355-cd77373fe017",
+  "job_id": "job_20b6dbf777",
+  "executor": "local-docker",
+  "authorization_id": "a99000fe-3a4c-4914-b653-0be40cf5a881",
+  "contract_id": "51659f16-ed9a-4b30-a35e-3393a278c620",
+  "usage_gpu_seconds": 288000,
+  "usage_billing_basis": "contracted_capacity_window",
+  "usage_measured_gpu_seconds": 56,
+  "invoice_id": "cd03012b-ed67-471e-bf27-ac3ca5120b52",
+  "invoice_total_minor": 12800,
+  "settlement_rail": "x402",
+  "settlement_simulated": false,
+  "settlement_network": "eip155:84532",
+  "settlement_onchain_amount": "0.01 USDC (testnet, scaled down from the deal value)",
+  "settlement_transaction": "0x529f2d1a8588e5e2e6ece7cde4b57b8ecc06b0e4eb048b1afe19f89c9a0fa62f",
+  "payout_rail": "solana-devnet",
+  "payout_asset": "SOL",
+  "payout_signature": "3LaDnmgfaKvyRSXiigQcmms5Eztfwvhpmmd16qt9y1yBrkngZdCDmSf6FbNPPQm7zLBGZnf6wskWie1yrurAeSca",
+  "payout_lamports": 10000000,
+  "payout_slot": 515007992,
+  "payout_payer": "6U6kUuQKmpz3YWXtnrG75Fm6vv79YoWzfikCkVK1vhxY",
+  "payout_destination": "zYf9msGnh6so38hmYqAXRcTooF37jeP45BWUW92SHCB",
+  "payout_simulated": false,
+  "payout_status": "paid",
+  "balanced": true
+}

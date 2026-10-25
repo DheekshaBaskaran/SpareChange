@@ -1,0 +1,40 @@
+{
+  "probe": "relay-contract-probe/2.0",
+  "kind": "reconstructed",
+  "generated_at": "2026-10-25T14:46:15.193396Z",
+  "base_url": "https://api.bitsthat.fit",
+  "contract": "relay-duo1.v1",
+  "mode": "agent-only",
+  "workload_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab",
+  "agent_key": {
+    "present": true,
+    "length": 49,
+    "prefix": "relay_",
+    "sha256_12": "dbab6894cefb"
+  },
+  "human_key": {
+    "present": false
+  },
+  "deal_id": "2507d096-15fe-4616-bea2-31f173d7e17b",
+  "operations": [
+    {"operation":"health","method":"GET","path":"/v1/health","http_status":200,"expected":[200],"code":null,"detail":null,"elapsed_ms":194,"ok":true,"boundary":false,"guard":false,"note":"database must be ok"},
+    {"operation":"workload_read","method":"GET","path":"/v1/workloads/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab","http_status":200,"expected":[200],"code":null,"detail":null,"elapsed_ms":644,"ok":true,"boundary":false,"guard":false,"note":null},
+    {"operation":"party_read","method":"GET","path":"/v1/parties/22222222-2222-4222-8222-222222222222","http_status":200,"expected":[200],"code":null,"detail":null,"elapsed_ms":247,"ok":true,"boundary":false,"guard":false,"note":null},
+    {"operation":"offers_read","method":"GET","path":"/v1/offers?workload_id=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab&limit=20","http_status":200,"expected":[200],"code":null,"detail":null,"elapsed_ms":251,"ok":true,"boundary":false,"guard":false,"note":null},
+    {"operation":"market_history_read","method":"GET","path":"/v1/market/history?gpu_model=H100&window_hours=24","http_status":200,"expected":[200],"code":null,"detail":null,"elapsed_ms":231,"ok":true,"boundary":false,"guard":false,"note":null},
+    {"operation":"deal_search","method":"POST","path":"/v1/deals/search","http_status":201,"expected":[200,201],"code":null,"detail":null,"elapsed_ms":1742,"ok":true,"boundary":false,"guard":false,"note":null},
+    {"operation":"deal_read","method":"GET","path":"/v1/deals/2507d096-15fe-4616-bea2-31f173d7e17b","http_status":200,"expected":[200],"code":null,"detail":null,"elapsed_ms":417,"ok":true,"boundary":false,"guard":false,"note":null},
+    {"operation":"counteroffer","method":"POST","path":"/v1/deals/2507d096-15fe-4616-bea2-31f173d7e17b/counteroffers","http_status":403,"expected":[201,403],"code":"negotiation_mandate_required","detail":"Agents must present an active negotiation mandate.","elapsed_ms":582,"ok":true,"boundary":true,"guard":false,"note":"agent-only: 403 is the expected mandate/authorization boundary"},
+    {"operation":"negotiation_event","method":"POST","path":"/v1/deals/2507d096-15fe-4616-bea2-31f173d7e17b/negotiation-events","http_status":201,"expected":[201],"code":null,"detail":null,"elapsed_ms":800,"ok":true,"boundary":false,"guard":false,"note":"terms version 1"},
+    {"operation":"approval_request","method":"POST","path":"/v1/approval-requests","http_status":409,"expected":[201,409],"code":"approval_request_exists","detail":"An approval request already exists for this deal version and participant.","elapsed_ms":648,"ok":true,"boundary":false,"guard":true,"note":"409 approval_request_exists is the expected duplicate guard"},
+    {"operation":"approvals_list","method":"GET","path":"/v1/approvals?deal_id=2507d096-15fe-4616-bea2-31f173d7e17b&version=1","http_status":200,"expected":[200],"code":null,"detail":null,"elapsed_ms":291,"ok":true,"boundary":false,"guard":false,"note":null},
+    {"operation":"approval_decision","method":"POST","path":"/v1/approvals","http_status":403,"expected":[403],"code":"human_attestation_required","detail":"Participant approvals must be submitted by a human credential, not an agent or service credential.","elapsed_ms":343,"ok":true,"boundary":true,"guard":false,"note":"agent-only: 403 human_attestation_required is the expected boundary"},
+    {"operation":"handoff","method":"POST","path":"/v1/deals/2507d096-15fe-4616-bea2-31f173d7e17b/handoff","http_status":409,"expected":[200,409],"code":"handoff_not_permitted","detail":"The deal is not ready for handoff.","elapsed_ms":981,"ok":true,"boundary":false,"guard":true,"note":"409 handoff_not_permitted is the expected incomplete-approval guard"},
+    {"operation":"escalation","method":"POST","path":"/v1/deals/2507d096-15fe-4616-bea2-31f173d7e17b/escalations","http_status":201,"expected":[201],"code":null,"detail":null,"elapsed_ms":750,"ok":true,"boundary":false,"guard":false,"note":"deal is marked escalated after the probe"}
+  ],
+  "passed": 14,
+  "total": 14,
+  "boundaries": ["counteroffer", "approval_decision"],
+  "guards": ["approval_request", "handoff"],
+  "verdict": "ok"
+}

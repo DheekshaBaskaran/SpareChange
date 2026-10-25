@@ -183,25 +183,39 @@ credentials, never an agent key.
 ## 5. Hosted CREAO: what is missing
 
 The Relay side is ready: 14 preserved operations, work queue, evidence packet,
-findings, correction/escalation, audit, and a 14-operation contract test.
-What has never happened is a **hosted CREAO run against a public Relay**.
-Required, and not available in this workspace:
+findings, correction/escalation, audit, and a 14-operation contract test. Relay
+is live at `https://api.bitsthat.fit`; health, work-items, and workload reads
+return `200` with the Relay agent credential. The reconstructed 14-operation
+probe ran in hosted CREAO and passed **14/14** using an attached ZIP copy
+([evidence](evidence/contract-probe-v2-creao-2026-10-25.json)). That
+proves hosted reachability and the contract statuses, not the coordinator.
 
-1. Public HTTPS host reachable from CREAO egress (no request password page).
-2. `RELAY_API_BASE_URL` set to the host root (no `/v1`) in CREAO.
-3. `RELAY_API_KEY` stored as a CREAO secret (agent role).
-4. The existing agent's 14/14 `contract_probe.py` output.
-5. A CREAO run id with `backend.is_mock=false`, plus matching Relay
-   `audit_events` (time, endpoint, principal) and work-item id.
-6. The full exception run from the hosted agent: claim → evidence → findings →
-   correction request → human approval → settlement evidence.
+The existing **Relay Deal Coordinator** app still completes its app-scoped runs
+with `result.text: ""`. Seven recorded runs are empty, and the app list endpoint
+rejects the app-scoped trigger key with `403`. The app-files manifest did not
+list `contract_probe_v2.py`. Required to close the coordinator gate:
 
-`RELAY_API_BASE_URL` currently points at a localtunnel address that returns
-`503 Tunnel Unavailable`. Any hosted proof needs the Vultr HTTPS host first. Do
-not mark this integration verified from `e2e:exception`; that is local
-orchestration. The exact CREAO-side configuration, probe commands, evidence
-requirements, and failure meanings are in
-[HOSTED_CREAO_RUNBOOK.md](HOSTED_CREAO_RUNBOOK.md).
+1. Stage `contract_probe_v2.py` in CREAO app files so repeat runs do not depend
+   on an out-of-manifest attachment.
+2. Replace the coordinator's Relay secret with the Relay `relay_…` agent key if
+   it is still a `capi_…` trigger key; see
+   [CREAO_AUTH_DIAGNOSIS.md](CREAO_AUTH_DIAGNOSIS.md).
+3. Run the coordinator with `backend_mode=http`, `approval_mode=stop_for_human`,
+   and non-empty output; capture a CREAO run id with `backend.is_mock=false`.
+4. Match that run to Relay `audit_events`/Caddy evidence (time, endpoint,
+   principal) and a work-item id.
+5. Record real human approvals with human credentials; the agent must receive
+   `403 human_attestation_required` when it tries to approve.
+6. Exercise the full exception run from the hosted agent: claim → evidence →
+   findings → correction request → human approval → settlement evidence.
+
+The public Vultr host is now live, so the old localtunnel blocker is gone; the
+old tunnel still returns `503 Tunnel Unavailable` and must not be used. The
+remaining issue is credential scope, not hosting. Do not mark this integration
+verified from `e2e:exception`; that is local orchestration. The exact CREAO-side
+configuration, probe commands, evidence requirements, and failure meanings are
+in [HOSTED_CREAO_RUNBOOK.md](HOSTED_CREAO_RUNBOOK.md); the confirmed key-scope
+mismatch is in [CREAO_AUTH_DIAGNOSIS.md](CREAO_AUTH_DIAGNOSIS.md).
 
 ---
 

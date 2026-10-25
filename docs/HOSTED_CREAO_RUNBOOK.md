@@ -6,9 +6,18 @@ specification is in [`CREAO_AGENT_HANDOFF.md`](CREAO_AGENT_HANDOFF.md); the
 Relay-side contract status is in
 [`CREAO_INTEGRATION_STATUS.md`](CREAO_INTEGRATION_STATUS.md).
 
-**Current state:** the Relay half is implemented and locally tested, including
-the 14 preserved operations. **No hosted CREAO run has ever reached a public
-Relay** from this workspace. A local `e2e:exception` run is not hosted evidence.
+**Current state (2026-10-25):** Relay is live at `https://api.bitsthat.fit`;
+`/v1/health` returns `200` with `database: "ok"` and direct authenticated reads
+return `200`. A hosted CREAO run of the reconstructed 14-operation probe has
+now passed `14/14`
+([hosted result](evidence/contract-probe-v2-creao-2026-10-25.json)). The
+agent ran the attached ZIP copy because `contract_probe_v2.py` was missing from
+`/home/user/agent/app-files.json`; the manifest listed only `relay_read_probe.py`
+and `SKILL.md`. Stage the probe in app files before the next run. The preserved
+`contract_probe.py` remains absent from this repository and from both deployed
+CREAO bundles, and the 31-operation full probe remains unavailable. Local
+`e2e:exception` output is separate evidence and does not substitute for a hosted
+run.
 
 ---
 
@@ -68,6 +77,19 @@ The agent sends `Authorization: Bearer <key>` and
 `X-Relay-Contract: relay-duo1.v1` on every request. It refuses to start a live
 run without a key. Do not use a human, finance, admin, or worker key.
 
+### 2.1 Credential scopes are not interchangeable
+
+| Credential | Prefix | Audience | Where it belongs |
+| --- | --- | --- | --- |
+| Relay agent key | `relay_…` | Relay `/v1/*` | CREAO **secret** `RELAY_API_KEY` |
+| CREAO app API Trigger key | `capi_…` | `agent.creao.ai/api/v1/apps/{appId}/runs` | Operator trigger only; `CREAO_API_KEY` |
+| CREAO Account API key | `cr_sk_…` | `developer.creao.ai/v1/*` | Agent/secret management only |
+
+A `capi_…` key can create and list CREAO runs (`202`/`200`) and is still
+rejected by Relay (`401`). Do not infer Relay access from a successful CREAO
+run request. The reverse is also true: a Relay `relay_…` key cannot manage
+CREAO agents or secrets.
+
 Run input for the first live run:
 
 | Field | Value |
@@ -82,17 +104,28 @@ Run input for the first live run:
 Do not use `backend_mode=mock` or `auto_simulate`. A run whose
 `backend.is_mock` is not `false` is not evidence.
 
-## 3. Prove the wire contract (read-only)
+## 3. Probe the wire contract (state-changing demo probe)
 
-From the CREAO runtime package, run the preserved read probe:
+The reconstructed probe performs writes: it searches and creates a deal,
+records a negotiation event, and marks the probe deal escalated. It is not
+read-only and must run only against the demo dataset. The preserved
+`contract_probe.py` is **not available**. It is absent from this repository and
+from both deployed CREAO agent bundles. The stand-in is
+[`../creao/relay-contract-probe/`](../creao/relay-contract-probe/README.md). It
+is **reconstructed** from the OpenAPI contract and the Relay route tests; label
+it as reconstructed in every report. It covers the 14 preserved operations
+only. There is no 31-operation full probe in this workspace.
+
+From the CREAO runtime package, run the reconstructed probe:
 
 ```bash
 RELAY_API_BASE_URL="https://api.<domain>" \
 RELAY_API_KEY="<agent key>" \
-python3 runtime/contract_probe.py --workload-id aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+python3 <mounted-path>/contract_probe_v2.py
 ```
 
-Required result: **14/14**. The 14 operations are:
+Required result: **`passed: 14`, `total: 14`, `verdict: "ok"`**. The 14
+operations are:
 
 | # | Method | Path |
 | --- | --- | --- |
@@ -111,19 +144,39 @@ Required result: **14/14**. The 14 operations are:
 | 13 | `POST` | `/v1/deals/{deal_id}/handoff` |
 | 14 | `POST` | `/v1/deals/{deal_id}/escalations` |
 
-Then run the full probe:
+Do not run a `--full` mode: the reconstructed probe does not implement one. The
+31-operation surface is **unproven**, not passed. The agent-only probe records
+two expected `403` authorization boundaries (counteroffer and approval decision)
+and two expected `409` guards (duplicate approval request and incomplete-approval
+handoff). Those are contract evidence, not a completed deal.
+
+Save the raw output. Include the timestamp, the public host, the mode, and the
+key fingerprint (`sha256_12`, never the key) in the evidence file.
+
+### 3.1 Minimal fresh-agent probe (read-only; use if auth/connectivity is uncertain)
+
+If the existing agent still returns `401`, create a separate **Relay Read Probe**
+agent and leave the original untouched. The package is in
+[`../creao/relay-read-probe/`](../creao/relay-read-probe/README.md). It makes
+only `GET /v1/health` and one authenticated `GET
+/v1/creao/work-items?kind=financial_exception`, and reports:
+
+- the host it actually used;
+- whether a key was present, its length, prefix, and a short SHA-256 fingerprint;
+- the exact HTTP status and error code from Relay;
+- `verdict: "ok"` only when both reads are `200`.
 
 ```bash
-RELAY_API_BASE_URL="https://api.<domain>" \
-RELAY_API_KEY="<agent key>" \
-python3 runtime/contract_probe.py --full --yes
+RELAY_API_BASE_URL="https://api.bitsthat.fit" \
+RELAY_API_KEY="<relay_ agent key>" \
+python3 creao/relay-read-probe/relay_read_probe.py
 ```
 
-Required result: **31/31**. The full probe creates a deal and pending approval
-requests only; it does not approve, pay, or hand off.
-
-Save both raw outputs. Include the timestamp and the public host in the evidence
-file.
+Required hosted result: `verdict: "ok"`. A `401` with a `capi_…` prefix in
+`key.prefix` means the CREAO secret is still the wrong credential; a different
+`sha256_12` from the local Relay key means the secret is stale. Because the
+14-operation probe creates and escalates a deal, first confirm that the target
+is the demo environment and that you are willing to create that test record.
 
 ## 4. First live agent run (human approvals)
 
@@ -185,8 +238,13 @@ satisfies this gate.
 Record all of the following:
 
 1. Public host and `GET /v1/health` output with `database: "ok"`.
-2. `contract_probe.py` read output: **14/14**, with timestamp.
-3. `contract_probe.py --full --yes` output: **31/31**.
+2. Reconstructed `contract_probe_v2.py` output: **14/14**, with timestamp and
+   the explicit label "reconstructed". A hosted CREAO result now exists at
+   [the saved evidence file](evidence/contract-probe-v2-creao-2026-10-25.json);
+   note that it was run from an attached ZIP copy because the app-files manifest
+   did not stage the probe.
+3. The preserved `contract_probe.py` and the 31-operation full probe are
+   **unavailable**; record them as gaps, never as passes.
 4. CREAO run id and `backend.is_mock: false` from the agent's output.
 5. Relay evidence of the same run: a Caddy access-log line or an
    `audit_events` row whose time, endpoint, and principal match the agent run.
@@ -207,14 +265,14 @@ Store the evidence with the run date and public URL. Do not include keys.
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | `503 Tunnel Unavailable` | old localtunnel URL | use the Caddy HTTPS host, not a tunnel |
-| `401 unauthorized` | missing/wrong bearer key, or key not `agent` | re-issue an agent key and update the CREAO secret |
+| `401 unauthorized` | missing/wrong bearer key, a CREAO `capi_`/`cr_sk_` key in `RELAY_API_KEY`, or key not `agent` | replace the CREAO secret with a Relay `relay_…` agent key; see [CREAO_AUTH_DIAGNOSIS.md](CREAO_AUTH_DIAGNOSIS.md) |
 | `400 contract_version_mismatch` / missing header | client not sending `relay-duo1.v1` | use the shipped client; do not strip headers at a proxy |
 | `404` on a preserved path | wrong base URL (includes `/v1`) or frontend proxy path | set the host root only |
 | `409 handoff_not_permitted` | approvals incomplete/stale | re-run with current-version human decisions |
 | `409 terms_version_stale` | approval predates a counteroffer | collect fresh approvals for the new version |
 | `429`/`5xx` | rate limit or transient backend | client retries 3×; keep `Idempotency-Key` stable |
 | `503` on investigation | Elastic disabled/deprecated | expected; exception stays open, do not approve from silence |
-| probe 14/14 but full 31/31 fails on search | no free capacity from a prior run | reset demo state, then re-probe |
+| probe 14/14 but a later deal search fails | no free capacity from a prior run | reset demo state, then re-probe |
 | clock skew warnings | host/agent clocks differ > 60 s | enable NTP on Vultr and the agent runtime |
 
 ## 8. Go-live checklist
@@ -222,7 +280,10 @@ Store the evidence with the run date and public URL. Do not include keys.
 - [ ] `https://api.<domain>/v1/health` returns `database: "ok"` from outside Vultr.
 - [ ] `RELAY_API_BASE_URL` has no `/v1` and no trailing slash.
 - [ ] `RELAY_API_KEY` is a CREAO secret and has role `agent`.
-- [ ] Read probe 14/14 and full probe 31/31 are saved with timestamps.
+- [x] Reconstructed 14-operation probe is 14/14 in CREAO (attached ZIP copy);
+      stage `contract_probe_v2.py` in the app-files manifest for repeatability.
+- [ ] Preserved `contract_probe.py` and the 31-operation full probe are recovered
+      or explicitly left unavailable.
 - [ ] A live run reports `backend.is_mock: false`.
 - [ ] Caddy/audit evidence matches the run's time and principal.
 - [ ] Human approvals use human credentials; agent approval returns 403.
