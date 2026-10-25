@@ -4,6 +4,7 @@ import { appendAudit } from "../db/audit.js";
 import { iso, minor } from "../db/values.js";
 import { ApiError } from "../errors.js";
 import type { Principal } from "../contract.js";
+import { elasticInvestigationHint } from "../elastic/work-item.js";
 import { postJournalEntryTx } from "./ledger.js";
 import { checkSpendingAuthority } from "./payments.js";
 
@@ -697,6 +698,7 @@ export async function confirmProviderPayout(
             payout_id: payoutId,
             payable_id: payable.id,
             invoice_id: payable.invoice_id,
+            ...elasticInvestigationHint(exceptionId),
           }),
         ],
       );

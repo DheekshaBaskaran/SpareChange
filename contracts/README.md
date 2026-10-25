@@ -1,6 +1,6 @@
 # `relay-duo1.v1` contract
 
-The machine-readable specification is [relay-duo1.v1.openapi.json](relay-duo1.v1.openapi.json). It declares 68 operations under `/v1` and `/internal/v1`, including the preserved 14 operations used by the hosted CREAO Deal Coordinator.
+The machine-readable specification is [relay-duo1.v1.openapi.json](relay-duo1.v1.openapi.json). It declares 71 operations under `/v1` and `/internal/v1`, including the preserved 14 operations used by the hosted CREAO Deal Coordinator.
 
 ## Wire rules
 
@@ -64,6 +64,16 @@ Buyer receivables and provider payables are separate. A confirmed buyer payment 
 
 `POST /v1/finance/reconciliations` checks contract, invoice, usage, buyer payment, receivable, provider payable, payout, and AP ledger records. Open exceptions block the corresponding buyer payment or provider payout as appropriate.
 
+## Elastic investigator
+
+CREAO invokes the deployed Elastic Agent Builder agent through:
+
+- `POST /v1/creao/investigations/{exception_id}/run` with optional `question` and `follow_up_of`;
+- `GET /v1/creao/investigations/{exception_id}/runs` for history and current exception status;
+- `GET /v1/finance/investigations/{investigation_id}` for findings, citations, agent steps, and warnings.
+
+Every returned citation is re-read from the investigation index and checked against the cited field value before it is persisted. Invalid or unrelated citations are rejected. The agent cannot approve, correct, settle, or move money, and an Elastic outage returns `503` without changing accounting state. Tiger Data remains the system of record. Setup and the full response shape are in [../docs/ELASTIC_INTEGRATION.md](../docs/ELASTIC_INTEGRATION.md).
+
 ## Duo 2 boundary
 
 Relay never calls Solana or x402. Duo 2 uses a `worker` key and the `/internal/v1/duo2` operations:
@@ -88,7 +98,7 @@ npm run typecheck
 npm test
 ```
 
-`test/openapi.test.ts` validates the operation count, unique operation IDs, contract headers, and idempotency-key declarations. `test/creao-contract.test.ts` validates the 14 preserved operations and the live HTTP workflow.
+`test/openapi.test.ts` validates the operation count, unique operation IDs, contract headers, and idempotency-key declarations. `test/creao-contract.test.ts` validates the 14 preserved operations and the live HTTP workflow. `test/elastic.test.ts` validates the investigation endpoint and evidence checks; `test/elastic-bootstrap.test.ts` validates the Agent Builder setup calls.
 
 ## Versioning
 

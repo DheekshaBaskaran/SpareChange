@@ -4,6 +4,7 @@ import { appendAudit } from "../db/audit.js";
 import { iso, minor } from "../db/values.js";
 import { ApiError } from "../errors.js";
 import type { Principal } from "../contract.js";
+import { elasticInvestigationHint } from "../elastic/work-item.js";
 import { postJournalEntryTx } from "./ledger.js";
 
 interface ObligationRow {
@@ -638,7 +639,12 @@ export async function confirmSettlement(
         [
           randomUUID(),
           invoice.contract_id,
-          JSON.stringify({ exception_id: exceptionId, kind: "payment_failed", invoice_id: invoice.id }),
+          JSON.stringify({
+            exception_id: exceptionId,
+            kind: "payment_failed",
+            invoice_id: invoice.id,
+            ...elasticInvestigationHint(exceptionId),
+          }),
         ],
       );
       await appendAudit(tx, {

@@ -210,6 +210,35 @@ the agent.
   approval expiry against the run clock.
 - Money integer minor units; timestamps ISO 8601 UTC.
 
+**Financial investigation add-on**
+
+When a `financial_exception` work item is claimed, CREAO may call the Elastic investigator before
+recording findings:
+
+```http
+POST /v1/creao/investigations/{exception_id}/run
+Authorization: Bearer <agent key>
+X-Relay-Contract: relay-duo1.v1
+Idempotency-Key: <unique per run>
+
+{ "question": "optional investigation question", "follow_up_of": "optional prior investigation id" }
+```
+
+The backend starts a fresh Agent Builder conversation, retrieves indexed evidence, and returns
+`investigation.findings` with `issue_code`, `summary`, `severity`, `confidence`, `uncertainty`,
+`recommended_actions`, and citations. It also returns the current `financial_exception` status.
+
+- Use a **120 s** request timeout for this call; the default 20 s deal-coordinator timeout is too short.
+- Treat `completed`, `completed_with_warnings`, and `insufficient_evidence` as investigation outcomes,
+  not decisions. CREAO still coordinates the human approval/correction workflow.
+- A `503` means Elastic is unavailable or the run failed; the exception stays open and the payment
+  remains blocked. Escalate or retry later; do not approve from silence.
+- Send `follow_up_of` after new evidence arrives. It must belong to the same exception.
+- Read `GET /v1/creao/investigations/{exception_id}/runs` for history and
+  `GET /v1/finance/investigations/{investigation_id}` for the persisted evidence.
+
+The full contract and setup are in [ELASTIC_INTEGRATION.md](ELASTIC_INTEGRATION.md).
+
 **Server-side obligations the agent depends on (it cannot enforce them for you)**
 
 1. Reject approvals from agent credentials; resolve `attested_by` to a human authorised for that

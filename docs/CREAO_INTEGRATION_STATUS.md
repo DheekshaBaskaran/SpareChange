@@ -2,7 +2,7 @@
 
 **Verified:** 2026-10-24
 **Branch:** `Makayla`
-**Verdict:** **RELAY-SIDE 14-OPERATION CONTRACT VERIFIED LOCALLY / LIVE HOSTED AGENT NOT VERIFIED**
+**Verdict:** **RELAY-SIDE 14-OPERATION CONTRACT AND ELASTIC INVESTIGATOR VERIFIED LOCALLY / LIVE HOSTED AGENT AND LIVE ELASTIC DEPLOYMENT NOT VERIFIED**
 
 The Relay backend preserves the 14 operations used by the existing hosted CREAO Deal Coordinator. The agent specification is [CREAO_AGENT_HANDOFF.md](CREAO_AGENT_HANDOFF.md); the agent itself is **not rebuilt** here. There is still no evidence in this workspace that the hosted agent has called a deployed Relay instance, and no public host, CREAO secret, runtime package, or probe output has been provided.
 
@@ -35,6 +35,11 @@ Contract additions do not change those paths or methods. `POST /v1/deals/search`
 | Agent cannot approve or pay | `[x]` | 403 tests in `test/approvals.test.ts` and `test/recovery.test.ts` |
 | Audit query | `[x]` | `GET /v1/audit` used in workflow tests |
 | 14 preserved operations | `[x]` | `test/creao-contract.test.ts` |
+| Elastic investigation endpoint and history | `[x]` | `test/elastic.test.ts` |
+| Scoped Agent Builder bootstrap | `[x]` | `test/elastic-bootstrap.test.ts` |
+| Incremental outbox projection | `[x]` | `test/elastic.test.ts` |
+| Evidence citation re-validation | `[x]` | Unrelated/deleted citations rejected in `test/elastic.test.ts` |
+| Degraded mode and failed investigation | `[x]` | `503` paths leave the exception open |
 
 ## What is still external
 
@@ -46,6 +51,8 @@ Contract additions do not change those paths or methods. `POST /v1/deals/search`
 - An agent run showing `backend.is_mock=false`.
 - A request log or `audit_events` row matching the agent's run time, endpoint, and principal.
 - The agent skill update that calls the new finance and investigation endpoints.
+- An Elasticsearch Serverless project, scoped Elasticsearch/Kibana API keys, a completed `elastic:bootstrap` and `elastic:reindex`, and a live `Relay Financial Investigator` run with validated citations.
+- A CREAO run that claims a financial-exception work item and calls `POST /v1/creao/investigations/{exception_id}/run`, followed by a correction/human-approval workflow.
 
 ## Required proof to mark the live integration verified
 
@@ -59,8 +66,10 @@ Contract additions do not change those paths or methods. `POST /v1/deals/search`
 8. A negative test: the agent's `POST /v1/approvals` returns `403 human_attestation_required`.
 9. A real human approval recorded through a human credential.
 10. A response showing the handoff remains `settlement_authorized: false`; execution authorization is a separate explicit step.
+11. For the Elastic investigator: bootstrap output for the index, eight tools, and agent; a backfill result; and a live investigation response whose persisted citations all match indexed records.
+12. For a failed investigation: the exception remains open, no correction is applied, no payment is approved, and the failure is visible in `exception_actions` and `elastic_investigations`.
 
-Do not mark the integration verified from a mock run, a reference-server run, a localhost curl, or a screenshot of the CREAO UI alone.
+Do not mark the integration verified from a mock run, a reference-server run, a localhost curl, or a screenshot of the CREAO UI alone. Do not mark the Elastic agent deployed from a local bootstrap test.
 
 ## What to do next
 
@@ -68,8 +77,9 @@ Do not mark the integration verified from a mock run, a reference-server run, a 
 2. Deploy the backend to the shared public HTTPS host.
 3. Set the CREAO secrets and run the preserved read-only probe.
 4. Run the full agent workflow against the deployed API and record the probe output.
-5. Record the evidence in [OWNER_CHECKLIST.md](OWNER_CHECKLIST.md).
+5. Configure Elasticsearch Serverless and Agent Builder, run `npm run elastic:bootstrap` and `npm run elastic:reindex`, then run one live investigation and one deliberate failure. [ELASTIC_INTEGRATION.md](ELASTIC_INTEGRATION.md) has the exact contract and live gates.
+6. Record the evidence in [OWNER_CHECKLIST.md](OWNER_CHECKLIST.md).
 
 ## Accurate wording for the demo
 
-> "The Relay coordination and finance APIs are implemented and locally tested end to end, including the preserved 14-operation CREAO contract, the hosted-agent work queue, and finance investigation surfaces. The live hosted CREAO connection is still pending a public host, Tiger Data credentials, and a probe result; it is not being rebuilt."
+> "The Relay coordination and finance APIs are implemented and locally tested end to end, including the preserved 14-operation CREAO contract, the hosted-agent work queue, finance investigation surfaces, and a scoped Elastic Agent Builder investigator with citation validation. The live hosted CREAO connection is still pending a public host, Tiger Data credentials, and a probe result. The live Elastic agent is pending a Serverless project, scoped keys, bootstrap, and a recorded investigation; it is not being rebuilt."

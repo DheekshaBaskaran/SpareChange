@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Db } from "../db/client.js";
 import { appendAudit } from "../db/audit.js";
 import { asObject, iso, minor } from "../db/values.js";
+import { elasticInvestigationHint } from "../elastic/work-item.js";
 import { accountBalance } from "./ledger.js";
 import { getException, type FinancialExceptionView } from "./exceptions.js";
 
@@ -79,6 +80,7 @@ async function ensureException(
         invoice_id: input.invoiceId,
         contract_id: input.contractId,
         next_step: "investigate_using_persisted_records",
+        ...elasticInvestigationHint(id),
       }),
     ],
   );

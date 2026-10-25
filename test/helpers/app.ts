@@ -4,6 +4,8 @@ import type { AppConfig } from "../../src/config.js";
 import { CONTRACT_VERSION } from "../../src/contract.js";
 import { runMigrations } from "../../src/db/migrate.js";
 import { DEMO_IDS, seedDemo } from "../../src/db/seed-demo.js";
+import type { Db } from "../../src/db/client.js";
+import type { ElasticInvestigationService } from "../../src/elastic/types.js";
 import { PGliteDb } from "./db.js";
 
 export const TEST_KEYS = {
@@ -23,7 +25,9 @@ export const TEST_HUMANS = {
   northstar: { userId: DEMO_IDS.humans.priya, partyId: DEMO_IDS.parties.northstar },
 } as const;
 
-export async function createTestContext() {
+export async function createTestContext(options: {
+  elasticFactory?: (db: Db) => ElasticInvestigationService;
+} = {}) {
   const db = new PGliteDb();
   await runMigrations(db);
   await seedDemo(db);
@@ -77,8 +81,14 @@ export async function createTestContext() {
     envAgentKey: null,
     allowSimulatedApprovals: false,
     timescale: false,
+    elastic: null,
   };
-  const app = buildApp({ db, config, logger: false });
+  const app = buildApp({
+    db,
+    config,
+    logger: false,
+    elastic: options.elasticFactory ? options.elasticFactory(db) : undefined,
+  });
   await app.ready();
 
   function headers(

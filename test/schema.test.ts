@@ -46,6 +46,11 @@ test("migrations create the core and finance tables", async (t) => {
     "provider_payouts",
     "invoice_adjustments",
     "negotiation_mandates",
+    "elastic_outbox",
+    "elastic_sync_runs",
+    "elastic_investigations",
+    "elastic_investigation_findings",
+    "elastic_investigation_evidence",
   ]) {
     assert.ok(names.has(expected), `missing table ${expected}`);
   }

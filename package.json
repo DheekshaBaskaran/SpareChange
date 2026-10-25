@@ -2,7 +2,7 @@
   "name": "relay-duo1",
   "version": "0.1.0",
   "private": true,
-  "description": "Relay Duo 1 clearing, CREAO, finance, controls, and Duo 2 boundary backend",
+  "description": "Relay Duo 1 clearing, CREAO, finance, controls, Duo 2 boundary, and Elastic investigation backend",
   "type": "module",
   "engines": {
     "node": ">=20.11"
@@ -16,7 +16,9 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:migrate:timescale": "tsx src/db/migrate.ts --timescale",
     "db:seed": "tsx src/db/seed.ts",
-    "key:create": "tsx scripts/create-api-key.ts"
+    "key:create": "tsx scripts/create-api-key.ts",
+    "elastic:bootstrap": "tsx scripts/elastic-bootstrap.ts",
+    "elastic:reindex": "tsx scripts/elastic-reindex.ts"
   },
   "dependencies": {
     "fastify": "^5.0.0",

@@ -1,15 +1,15 @@
-# Relay Duo 1 — clearing, CREAO, and Hyphenate finance
+# Relay Duo 1 — clearing, CREAO, Hyphenate finance, and Elastic investigation
 
-This branch is Person B's backend for Relay: deterministic multi-party clearing, CREAO coordination APIs, Hyphenate autonomous finance, financial controls, and the Relay-side Duo 2 interface.
+This branch is Person B's backend for Relay: deterministic multi-party clearing, CREAO coordination APIs, Hyphenate autonomous finance, financial controls, the Relay-side Duo 2 interface, and the Elastic Agent Builder investigation layer.
 
-It does **not** implement partner-owned Apify ingestion, Tiger Data provisioning, GPU workers, Solana/x402 execution, or the frontend. The existing hosted CREAO agent is integrated through APIs, not rebuilt here.
+It does **not** implement partner-owned Apify ingestion, Tiger Data provisioning, GPU workers, Solana/x402 execution, or the frontend, and it does not provision an Elastic Cloud project. The `elastic:bootstrap` script configures an existing Elasticsearch Serverless project and Agent Builder. The existing hosted CREAO agent is integrated through APIs, not rebuilt here.
 
 ## Current status
 
-- **38/38 local tests pass** against embedded Postgres (PGlite), including generalized conditional chains, two- and three-move cycles, uneconomic chain/cycle refusals, the full approval → execution → verified usage → invoice discrepancy → CREAO investigation → blocked payment → correction → test settlement → ledger reconciliation workflow, provider payouts, and payout failure recovery.
+- **47/47 local tests pass** against embedded Postgres (PGlite), including generalized conditional chains, two- and three-move cycles, uneconomic chain/cycle refusals, the full approval → execution → verified usage → invoice discrepancy → CREAO investigation → blocked payment → correction → test settlement → ledger reconciliation workflow, provider payouts, payout failure recovery, Elastic outbox projection, evidence-citation validation, Agent Builder bootstrap, and the Elastic HTTP wire contract.
 - Typecheck and production build are clean.
-- The machine-readable contract has **68 operations**; the 14 operations used by the existing hosted CREAO Deal Coordinator remain preserved.
-- Live Tiger Data, public hosting, hosted CREAO access, real workers, and Duo 2 settlement credentials are external integration dependencies. Missing credentials do not block local development.
+- The machine-readable contract has **71 operations**; the 14 operations used by the existing hosted CREAO Deal Coordinator remain preserved.
+- Live Tiger Data, public hosting, hosted CREAO access, an Elasticsearch Serverless project, real workers, and Duo 2 settlement credentials are external integration dependencies. Missing credentials do not block local development; the finance backend remains operational without Elastic.
 
 ## Quick start
 
@@ -24,6 +24,14 @@ npm run db:migrate           # core + finance + P1-P5 + provider payouts
 npm run db:migrate:timescale # optional: Timescale hypertable on Tiger Data
 npm run db:seed              # demo parties, offers, allocation, fixture deal
 npm run dev                  # http://localhost:4000
+```
+
+Optional Elasticsearch investigation layer:
+
+```bash
+# Set the Elastic variables from docs/ELASTIC_INTEGRATION.md first.
+npm run elastic:bootstrap   # index, eight tools, Relay Financial Investigator
+npm run elastic:reindex     # initial projection from Tiger Data
 ```
 
 Production:
@@ -63,6 +71,7 @@ Every write also needs `Idempotency-Key`. Replays return the original response w
 | Reconciliation | Contract ↔ invoice ↔ verified usage ↔ buyer payment ↔ receivable checks; provider payable ↔ payout ↔ AP ledger checks; overbilling, underbilling, duplicate invoice, missing payment, ledger mismatch, payout mismatch, overpayment, and failed payment exceptions |
 | Controls | RBAC, participant-scoped human approvals, separation of duties, spending limits, payment blocking on open exceptions, idempotent decisions, full audit |
 | Duo 2 boundary | Execution authorization; contract scopes; verified usage ingestion; buyer payment instructions; provider payout instructions; submit/confirm/fail settlement; retry after recovery. Relay never calls Solana or x402 itself. |
+| Elastic investigation | Serverless search projection with incremental outbox sync; eight scoped Agent Builder tools; autonomous `Relay Financial Investigator`; persisted findings; strict citation re-validation against indexed records; follow-ups; degraded mode when Elastic is unavailable. Tiger Data remains authoritative. |
 
 ### Conditional chains and cycles
 
@@ -84,7 +93,7 @@ Every move is checked against provider authorization/transferability, compatibil
 
 ## Main API groups
 
-The authoritative machine-readable contract is [contracts/relay-duo1.v1.openapi.json](contracts/relay-duo1.v1.openapi.json) (68 operations). Key paths:
+The authoritative machine-readable contract is [contracts/relay-duo1.v1.openapi.json](contracts/relay-duo1.v1.openapi.json) (71 operations). Key paths:
 
 - Clearing: `POST /v1/deals/search`, `GET /v1/deals/{id}`, `POST /v1/deals/{id}/counteroffers`, `POST /v1/deals/{id}/handoff`
 - Negotiation mandates: `GET|POST /v1/negotiation-mandates`
@@ -96,6 +105,7 @@ The authoritative machine-readable contract is [contracts/relay-duo1.v1.openapi.
 - Reconciliation and exceptions: `POST /v1/finance/reconciliations`, `GET /v1/finance/exceptions`, `GET /v1/finance/exceptions/{id}/evidence`, `POST /v1/finance/exceptions/{id}/propose-correction`
 - Ledger: `GET /v1/ledger/trial-balance`, `GET /v1/ledger/entries`
 - CREAO: `GET /v1/creao/work-items`, `POST /v1/creao/work-items/{id}/claim`, `POST /v1/creao/work-items/{id}/complete`, `GET /v1/creao/investigations/{exceptionId}`, `POST /v1/creao/investigations/{exceptionId}/findings`
+- Elastic investigator: `POST /v1/creao/investigations/{exceptionId}/run`, `GET /v1/creao/investigations/{exceptionId}/runs`, `GET /v1/finance/investigations/{investigationId}`
 - Duo 2: `POST /internal/v1/duo2/usage`, `GET /internal/v1/duo2/contracts/{id}`, `POST /internal/v1/duo2/payment-instructions/{id}/submit`, `POST /internal/v1/duo2/settlements`
 - Duo 2 provider payouts: `GET /internal/v1/duo2/provider-payables`, `GET /internal/v1/duo2/provider-payout-instructions`, `POST /internal/v1/duo2/provider-payout-instructions/{id}/submit`, `POST /internal/v1/duo2/provider-settlements`
 - Audit: `GET /v1/audit`
@@ -138,6 +148,8 @@ Rules enforced server-side:
 
 `test/solver-general.test.ts` covers multi-hop chains, an uneconomic chain refusal, and a closed cycle. `test/recovery.test.ts` covers buyer settlement failure and recovery; the payout tests in `test/finance.test.ts` cover provider payout failure and recovery.
 
+`test/elastic.test.ts` runs the investigation endpoint through HTTP with a fake Agent Builder and Elasticsearch: it checks outbox projection, shared identifiers, follow-ups, unrelated-record rejection, agent outage persistence, and insufficient evidence. `test/elastic-bootstrap.test.ts` verifies the index, eight tool, and agent creation requests against a local HTTP contract server. `test/elastic-http.test.ts` verifies the Elasticsearch bulk/mget/refresh/ping and Agent Builder converse wire shapes. None of these is a live Elastic deployment; [docs/ELASTIC_INTEGRATION.md](docs/ELASTIC_INTEGRATION.md) lists the live gate.
+
 ## Data and claims
 
 - Money is integer minor units; timestamps are ISO 8601 UTC.
@@ -154,6 +166,7 @@ Rules enforced server-side:
 2. Shared public HTTPS host.
 3. Hosted CREAO secrets and a 14/14 probe plus full workflow run.
 4. Duo 2 worker/usage and provider-payout contract confirmation; Solana/x402 test credentials.
-5. A recorded live rehearsal on real workers.
+5. Elasticsearch Serverless endpoints and scoped API keys; `elastic:bootstrap`, a completed backfill, and a live Agent Builder investigation with validated citations.
+6. A recorded live rehearsal on real workers.
 
-See [docs/OWNER_CHECKLIST.md](docs/OWNER_CHECKLIST.md) for scope ownership and acceptance gates, [docs/CREAO_INTEGRATION_STATUS.md](docs/CREAO_INTEGRATION_STATUS.md) for the live-agent status, [docs/CREAO_AGENT_HANDOFF.md](docs/CREAO_AGENT_HANDOFF.md) for the preserved agent specification, and [docs/PARTNER_INTEGRATION_HANDOFF.md](docs/PARTNER_INTEGRATION_HANDOFF.md) for exact partner interfaces.
+See [docs/OWNER_CHECKLIST.md](docs/OWNER_CHECKLIST.md) for scope ownership and acceptance gates, [docs/CREAO_INTEGRATION_STATUS.md](docs/CREAO_INTEGRATION_STATUS.md) for the live-agent status, [docs/CREAO_AGENT_HANDOFF.md](docs/CREAO_AGENT_HANDOFF.md) for the preserved agent specification, [docs/ELASTIC_INTEGRATION.md](docs/ELASTIC_INTEGRATION.md) for the Elastic setup and investigation contract, and [docs/PARTNER_INTEGRATION_HANDOFF.md](docs/PARTNER_INTEGRATION_HANDOFF.md) for exact partner interfaces.

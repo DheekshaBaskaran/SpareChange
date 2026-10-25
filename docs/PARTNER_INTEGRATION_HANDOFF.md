@@ -2,7 +2,7 @@
 
 **Branch:** `Makayla`
 **Contract:** `relay-duo1.v1`
-**Scope:** Relay Duo 1 backend. This document is the interface boundary for Tiger Data, Apify, Duo 2, and the frontend. It does not claim any live integration.
+**Scope:** Relay Duo 1 backend. This document is the interface boundary for Tiger Data, Apify, Elastic, Duo 2, and the frontend. It does not claim any live integration.
 
 ## 1. Common wire contract
 
@@ -163,7 +163,31 @@ The preserved 14 operations are listed in [contracts/README.md](../contracts/REA
 
 `proposal` is the persisted proposal used by the agent. `recommended`/`proposals`/`rejected` are additive aliases used by the Relay API. A counteroffer that is economically infeasible returns `409 counteroffer_infeasible` with `violations`; a stale version returns `409 terms_version_stale`.
 
-## 5. Duo 2
+## 5. Elastic investigator
+
+Elasticsearch Serverless is an investigation projection, not a system of record. The partner-owned Elastic project runs the deployed `Relay Financial Investigator` Agent Builder agent; Relay owns the index, sync, API, and evidence validation. Full setup and response examples are in [ELASTIC_INTEGRATION.md](ELASTIC_INTEGRATION.md).
+
+| Method | Path | Purpose | Permission |
+|---|---|---|---|
+| `POST` | `/v1/creao/investigations/{exception_id}/run` | Run the investigator, optionally with `question` and `follow_up_of` | `exception:investigate` |
+| `GET` | `/v1/creao/investigations/{exception_id}/runs` | Investigation history and current exception status | `finance:read` |
+| `GET` | `/v1/finance/investigations/{investigation_id}` | Findings, citations, agent steps, warnings | `finance:read` |
+
+```http
+POST /v1/creao/investigations/{exception_id}/run
+Authorization: Bearer <agent key>
+Idempotency-Key: <unique>
+
+{ "question": "Does the invoice match the approved rate and verified usage?" }
+```
+
+The response contains `investigation.findings` with `issue_code`, `title`, `summary`, `severity`, `confidence`, `uncertainty`, `recommended_actions`, and evidence citations. Each citation includes `index`, `document_id`, `entity_type`, `entity_id`, `field`, and `value`. Relay re-reads those documents and rejects citations whose entity, field, value, or relationship does not match. A finding with no valid citation is dropped.
+
+Statuses are `running`, `completed`, `completed_with_warnings`, `insufficient_evidence`, and `failed`. A successful run moves an `open` exception to `investigating`; it never resolves, corrects, approves, or pays. A failed or unconfigured investigation returns `503` and leaves the exception open. CREAO must escalate unresolved investigations rather than treating silence as approval.
+
+Configuration variables: `ELASTIC_ENABLED`, `ELASTICSEARCH_URL`, `KIBANA_URL`, `ELASTICSEARCH_API_KEY`, `KIBANA_API_KEY`, `ELASTIC_FINANCIAL_INDEX`, `ELASTIC_INVESTIGATOR_AGENT_ID`, `ELASTIC_KIBANA_SPACE`, and sync/timeout limits. Keys are server-side only.
+
+## 6. Duo 2
 
 Duo 2 owns workers, execution, Solana/x402, transaction signing, and on-chain confirmation. Relay owns the agreements, authorization envelope, usage ledger, payment/payout instructions, and reconciliation. Relay never signs or broadcasts a transaction.
 
@@ -259,7 +283,7 @@ A failed payout creates a `provider_payout_failed` exception and an agent work i
 - Relay records the transaction reference; Duo 2 must independently verify the chain transaction and finality.
 - `handoff` is not settlement authorization. `settlement_authorized` remains `false` until a separate execution authorization and payment approval exist.
 
-## 6. Frontend
+## 7. Frontend
 
 The frontend is teammate-owned. Relay exposes JSON APIs and does not build UI screens.
 
@@ -280,7 +304,7 @@ There is no browser session, cookie, CORS, or end-user login in this backend. AP
 | Execution and usage | `GET /v1/contracts?deal_id=...`, `GET /v1/deals/{id}/execution-authorizations`, `GET /internal/v1/duo2/contracts/{id}` |
 | Buyer finance | `GET /v1/invoices`, `GET /v1/invoices/{id}`, `GET /v1/payment-instructions`, `GET /v1/financial-approvals` |
 | Provider finance | `GET /v1/provider-payables`, `GET /v1/provider-payout-instructions`, `GET /v1/provider-payouts` |
-| Exceptions and investigation | `GET /v1/finance/exceptions`, `GET /v1/finance/exceptions/{id}/evidence`, `GET /v1/creao/work-items` |
+| Exceptions and investigation | `GET /v1/finance/exceptions`, `GET /v1/finance/exceptions/{id}/evidence`, `GET /v1/creao/work-items`, `GET /v1/creao/investigations/{id}/runs`, `GET /v1/finance/investigations/{id}` |
 | Ledger and audit | `GET /v1/ledger/trial-balance`, `GET /v1/ledger/entries`, `GET /v1/audit` |
 
 ### Write surfaces that need a human UI
@@ -296,14 +320,17 @@ There is no browser session, cookie, CORS, or end-user login in this backend. AP
 - Display `settlement_authorized: false`, `reservation_status`, and test-settlement labels honestly.
 - Show stale approvals after a version bump; never carry an earlier approval forward.
 - Treat `409 payment_blocked`, `409 provider_payout_blocked`, and `409 terms_version_stale` as user-visible states, not generic errors.
+- Treat `investigating`, `completed_with_warnings`, and `insufficient_evidence` as open/attention states, never as approval. Link citations by `document_id`; do not present model text without its evidence.
+- Show provider payout and buyer settlement test labels; Elastic findings cannot be used to bypass a blocked payment.
 
-## 7. Integration order and blockers
+## 8. Integration order and blockers
 
 1. **Tiger Data:** receive `DATABASE_URL`, apply `0001`–`0005`, verify Timescale hypertable, seed only if this is the demo environment.
 2. **Hosting:** deploy to a public HTTPS host; verify `/v1/health` and contract headers through the load balancer.
 3. **CREAO:** set `RELAY_API_BASE_URL` and `RELAY_API_KEY`; run the existing 14/14 probe and full workflow.
 4. **Apify:** agree the ingestion write path (current gap: no public ingestion endpoint); run one Actor into Tiger Data and verify `GET /v1/offers` labels the records `external_reference`/`executable: false`.
-5. **Duo 2:** confirm worker key, chain/cluster, destination policy, transaction reference format, and provider payout wallet; run one buyer settlement and one provider payout on devnet.
-6. **Frontend:** provide server-side proxy contract, human approver accounts, and the read views above; do not ship keys to the browser.
+5. **Elastic:** create the Serverless project, configure scoped keys, run `npm run elastic:bootstrap` and `npm run elastic:reindex`, then run one live investigation and one failed investigation. Do not mark the agent deployed until the bootstrap output and validated citations exist.
+6. **Duo 2:** confirm worker key, chain/cluster, destination policy, transaction reference format, and provider payout wallet; run one buyer settlement and one provider payout on devnet.
+7. **Frontend:** provide server-side proxy contract, human approver accounts, and the read views above; do not ship keys to the browser.
 
 Until each step has a live artifact (probe output, request/audit row, transaction reference, or screenshot with environment visible), it remains an external gate.

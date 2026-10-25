@@ -1,6 +1,6 @@
 # Person B — current delivery checklist
 
-**Purpose:** Person B's Relay scope: deterministic clearing, CREAO coordination, Hyphenate finance, financial controls, the Relay-side Duo 2 boundary, and the partner handoff. This checklist separates local implementation evidence from partner-owned services.
+**Purpose:** Person B's Relay scope: deterministic clearing, CREAO coordination, Hyphenate finance, financial controls, the Relay-side Duo 2 boundary, the Elastic investigation layer, and the partner handoff. This checklist separates local implementation evidence from partner-owned services.
 
 **Branch:** `Makayla`
 **Contract:** `relay-duo1.v1`
@@ -12,11 +12,12 @@
 |---|---|
 | `npm run typecheck` | exit 0 |
 | `npm run build` | exit 0 |
-| `npm test` | **38 passing, 0 failing** |
-| OpenAPI | **68 operations**; 14 hosted-agent operations preserved |
+| `npm test` | **47 passing, 0 failing** |
+| OpenAPI | **71 operations**; 14 hosted-agent operations preserved |
 | Solver | direct, one-for-one, bounded chains, closed cycles |
 | Finance | buyer invoices/AR, provider payables/AP, payouts, balanced ledger, reconciliation |
 | Duo 2 | execution authorization, usage, buyer settlement, provider payout, failure recovery |
+| Elastic | outbox sync, eight scoped Agent Builder tools, structured findings, citation validation |
 
 Primary test evidence:
 
@@ -24,7 +25,10 @@ Primary test evidence:
 - `test/recovery.test.ts` — failed buyer settlement, blocked retry, recovery, replacement instruction.
 - `test/solver-general.test.ts` — multi-hop chain, uneconomic chain refusal, closed cycle, no fabricated cycle.
 - `test/creao-contract.test.ts` — preserved 14 operations and the hosted-agent workflow shape.
-- `test/openapi.test.ts` — 68 operations, unique IDs, contract header and idempotency declarations.
+- `test/openapi.test.ts` — 71 operations, unique IDs, contract header and idempotency declarations.
+- `test/elastic.test.ts` — outbox projection, shared identifiers, citation validation, unrelated-record rejection, follow-up runs, unconfigured mode, and agent-outage persistence.
+- `test/elastic-bootstrap.test.ts` — scoped index, eight Agent Builder tools, agent instructions, and absence of broad platform tools.
+- `test/elastic-http.test.ts` — Elasticsearch bulk/mget/refresh/ping and Agent Builder converse wire shapes, plus retryable HTTP error mapping.
 
 ## Scope ownership
 
@@ -34,6 +38,8 @@ Primary test evidence:
 | CREAO backend APIs and work queue | Person B | Preserve the existing hosted agent; do not rebuild it |
 | Billing, invoices, ledger, payouts, reconciliation | Person B | Persisted records and balanced double-entry postings |
 | Controls, approvals, audit, Duo 2 boundary | Person B | Relay authorizes and reconciles; Duo 2 executes |
+| Elastic index, sync, investigator API | Person B | Searchable projection and evidence validation; Tiger Data stays authoritative; agent cannot approve or pay |
+| Elastic project, agent deployment, keys | Shared | Create the Serverless project and deploy the agent; keys stay server-side |
 | Apify Actor and public-listing ingestion | Partner | No collector in this repository |
 | Tiger Data provisioning and credentials | Partner | Relay consumes the provided connection |
 | Worker execution, Solana/x402 settlement | Duo 2 partner | Relay never signs or broadcasts |
@@ -74,6 +80,17 @@ Primary test evidence:
 - [x] Trial balance and journal entries; all entries balanced.
 - [x] Full audit trail for financial and settlement state changes.
 
+### Elastic — investigation layer
+
+- [x] `relay-financial-v1` index mapping with explicit relationship identifiers.
+- [x] Outbox triggers and incremental sync for agreements, invoices, adjustments, obligations, usage, execution, payments, payouts, approvals, journal, and audit.
+- [x] `Relay Financial Investigator` agent with eight scoped tools and no broad platform tools.
+- [x] Structured findings, confidence, uncertainty, missing evidence, and recommended actions.
+- [x] Server-side citation re-validation against indexed records and exception relationships.
+- [x] Follow-up investigations and persisted history.
+- [x] `503` degraded mode and failed-investigation persistence without finance changes.
+- [ ] Live Elasticsearch Serverless project and deployed agent.
+
 ### P5 — local integration
 
 - [x] End-to-end persistent workflow through HTTP routes, not a scripted UI.
@@ -98,6 +115,8 @@ A gate is not complete until there is a live artifact.
 | Apify ingestion | `[!]` | Live Actor run, normalized records in Tiger Data, `external_reference` labelling |
 | Frontend server proxy | `[!]` | Server-side key handling; no browser secrets |
 | Human approvers/notification | `[!]` | Real approver identities and delivery channel |
+| Elasticsearch Serverless + Agent Builder | `[!]` | Project endpoints, scoped keys, bootstrap output, backfill result |
+| Live Elastic investigation | `[!]` | Real `conversation_id`/`round_id`, tool steps, validated citations, failed-run evidence |
 
 ### Apify note
 
@@ -135,5 +154,6 @@ Do not claim a live gate from a local test, a reference server, a mock settlemen
 | 2026-10-24 | P1 | General chains/cycles | `[x]` | `test/solver-general.test.ts` |
 | 2026-10-24 | P3/P4 | Provider payouts, AP ledger, failure recovery | `[x]` | `test/finance.test.ts` |
 | 2026-10-24 | P2 | Preserved 14-operation CREAO contract | `[x]` | `test/creao-contract.test.ts` |
-| 2026-10-24 | P0–P5 | Full local verification | `[x]` | typecheck/build clean; 38 tests passing |
-| 2026-10-24 | Live | Tiger Data, host, CREAO, Duo 2, Apify, frontend | `[!]` | External credentials/access not provided |
+| 2026-10-24 | P0–P5 | Full local verification | `[x]` | typecheck/build clean; 47 tests passing |
+| 2026-10-24 | Elastic | Index, outbox sync, eight tools, investigator, citation validation | `[x]` | `test/elastic.test.ts`, `test/elastic-bootstrap.test.ts` |
+| 2026-10-24 | Live | Tiger Data, host, CREAO, Elastic, Duo 2, Apify, frontend | `[!]` | External credentials/access not provided; no Serverless project in this workspace |

@@ -6,11 +6,16 @@ import { CONTRACT_HEADER, CONTRACT_VERSION, SUPPORTED_CONTRACTS } from "./contra
 import type { Db } from "./db/client.js";
 import { ApiError, isDatabaseUnavailable, validationError } from "./errors.js";
 import { headerValue } from "./http.js";
+import { ElasticHttpClient } from "./elastic/client.js";
+import { ElasticFinanceIntegration } from "./elastic/investigations.js";
+import { ElasticSyncService } from "./elastic/sync.js";
+import type { ElasticInvestigationService } from "./elastic/types.js";
 import { registerApprovalRoutes } from "./routes/approvals.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerCreaoRoutes } from "./routes/creao.js";
 import { registerDealRoutes } from "./routes/deals.js";
 import { registerDuo2Routes } from "./routes/duo2.js";
+import { registerElasticRoutes } from "./routes/elastic.js";
 import { registerFinanceRoutes } from "./routes/finance.js";
 import { registerHealth } from "./routes/health.js";
 import { registerMarketRoutes } from "./routes/market.js";
@@ -19,6 +24,7 @@ export interface BuildAppOptions {
   db: Db;
   config: AppConfig;
   logger?: FastifyServerOptions["logger"];
+  elastic?: ElasticInvestigationService | null;
 }
 
 export function buildApp(options: BuildAppOptions) {
@@ -34,6 +40,30 @@ export function buildApp(options: BuildAppOptions) {
   });
 
   app.decorateRequest("principal", null);
+
+  let elastic = options.elastic;
+  if (elastic === undefined) {
+    if (options.config.elastic?.enabled) {
+      const client = new ElasticHttpClient(options.config.elastic);
+      const sync = new ElasticSyncService(
+        options.db,
+        options.config.elastic,
+        client,
+        (error) => app.log.error({ err: error }, "elastic index sync failed"),
+      );
+      elastic = new ElasticFinanceIntegration({
+        db: options.db,
+        config: options.config.elastic,
+        search: client,
+        agent: client,
+        sync,
+        onError: (error) => app.log.error({ err: error }, "elastic integration error"),
+      });
+    } else {
+      elastic = null;
+    }
+  }
+  if (elastic && options.config.elastic?.enabled) elastic.start?.();
 
   app.addHook("onRequest", async (request, reply) => {
     reply.header("X-Relay-Contract", CONTRACT_VERSION);
@@ -128,10 +158,12 @@ export function buildApp(options: BuildAppOptions) {
   registerApprovalRoutes(app, options.db, options.config);
   registerFinanceRoutes(app, options.db);
   registerCreaoRoutes(app, options.db);
+  registerElasticRoutes(app, options.db, elastic);
   registerDuo2Routes(app, options.db);
   registerAuditRoutes(app, options.db);
 
   app.addHook("onClose", async () => {
+    elastic?.stop?.();
     await options.db.close();
   });
 

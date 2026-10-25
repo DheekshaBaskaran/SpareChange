@@ -1,5 +1,21 @@
 import { CONTRACT_VERSION } from "./contract.js";
 
+export interface ElasticConfig {
+  enabled: boolean;
+  elasticsearchUrl: string | null;
+  kibanaUrl: string | null;
+  elasticsearchApiKey: string | null;
+  kibanaApiKey: string | null;
+  indexName: string;
+  agentId: string;
+  kibanaSpace: string | null;
+  syncIntervalMs: number;
+  investigationTimeoutMs: number;
+  maxSyncBatch: number;
+  maxBackfillPerType: number;
+  disabledReason: string | null;
+}
+
 export interface AppConfig {
   host: string;
   port: number;
@@ -9,6 +25,7 @@ export interface AppConfig {
   envAgentKey: string | null;
   allowSimulatedApprovals: boolean;
   timescale: boolean;
+  elastic: ElasticConfig | null;
 }
 
 function optional(value: string | undefined): string | null {
@@ -38,5 +55,48 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     envAgentKey: optional(env.RELAY_API_KEY),
     allowSimulatedApprovals: env.RELAY_ALLOW_SIMULATED_APPROVALS === "1",
     timescale: env.RELAY_TIMESCALE === "1",
+    elastic: loadElasticConfig(env),
+  };
+}
+
+function positiveInteger(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) return fallback;
+  return parsed;
+}
+
+export function loadElasticConfig(env: NodeJS.ProcessEnv): ElasticConfig | null {
+  const rawUrl = optional(env.ELASTICSEARCH_URL);
+  const rawKibanaUrl = optional(env.KIBANA_URL);
+  const elasticsearchApiKey = optional(env.ELASTICSEARCH_API_KEY);
+  const kibanaApiKey = optional(env.KIBANA_API_KEY) ?? elasticsearchApiKey;
+  const explicitlyDisabled = env.ELASTIC_ENABLED === "0";
+  const explicitlyEnabled = env.ELASTIC_ENABLED === "1";
+  const configured = Boolean(rawUrl && rawKibanaUrl && elasticsearchApiKey && kibanaApiKey);
+
+  // Absence of configuration is a supported degraded mode: the finance backend
+  // keeps working and the investigation endpoint returns 503.
+  if (explicitlyDisabled || (!explicitlyEnabled && !configured)) return null;
+
+  const elasticsearchUrl = rawUrl ? rawUrl.replace(/\/+$/, "") : null;
+  const kibanaUrl = rawKibanaUrl ? rawKibanaUrl.replace(/\/+$/, "") : null;
+  const disabledReason = configured
+    ? null
+    : "ELASTICSEARCH_URL, KIBANA_URL, and API keys are required when ELASTIC_ENABLED=1.";
+
+  return {
+    enabled: configured && !explicitlyDisabled,
+    elasticsearchUrl,
+    kibanaUrl,
+    elasticsearchApiKey,
+    kibanaApiKey,
+    indexName: env.ELASTIC_FINANCIAL_INDEX?.trim() || "relay-financial-v1",
+    agentId: env.ELASTIC_INVESTIGATOR_AGENT_ID?.trim() || "relay-financial-investigator",
+    kibanaSpace: optional(env.ELASTIC_KIBANA_SPACE),
+    syncIntervalMs: positiveInteger(env.ELASTIC_SYNC_INTERVAL_MS, 15_000, 1_000, 3_600_000),
+    investigationTimeoutMs: positiveInteger(env.ELASTIC_INVESTIGATION_TIMEOUT_MS, 120_000, 5_000, 600_000),
+    maxSyncBatch: positiveInteger(env.ELASTIC_MAX_SYNC_BATCH, 200, 1, 2_000),
+    maxBackfillPerType: positiveInteger(env.ELASTIC_MAX_BACKFILL_PER_TYPE, 5_000, 1, 50_000),
+    disabledReason,
   };
 }
