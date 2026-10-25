@@ -133,7 +133,14 @@ services:
       DUO1_AGENT_API_KEY: ${RELAY_API_KEY:?set RELAY_API_KEY in .env}
       DUO1_WORKER_API_KEY: ${DUO2_WORKER_API_KEY:?set DUO2_WORKER_API_KEY in .env}
       DUO2_INTERNAL_TOKEN: ${DUO2_INTERNAL_TOKEN:?set DUO2_INTERNAL_TOKEN in .env}
-      APP_BASE_URL: https://${DUO2_DOMAIN:?set DUO2_DOMAIN in .env}
+      # APP_BASE_URL is used only by the x402 client to reach this app's own
+      # paywalled provider endpoints (/api/provider/settle and /backfill).
+      # Pointing it at the public hostname makes the container hairpin out to
+      # the host's public IP and back through Caddy, which cloud firewalls
+      # (UFW's DOCKER-USER rules, provider NAT) commonly drop: the settlement
+      # then fails as a timeout or "fetch failed" before any payment is signed.
+      # Loopback keeps the same app and the same paywall without that hop.
+      APP_BASE_URL: ${DUO2_APP_BASE_URL:-http://127.0.0.1:3402}
       PAYMENT_MODE: ${PAYMENT_MODE:-mock}
       X402_BUYER_PRIVATE_KEY: ${X402_BUYER_PRIVATE_KEY:-}
       X402_PROVIDER_PRIVATE_KEY: ${X402_PROVIDER_PRIVATE_KEY:-}
